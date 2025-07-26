@@ -1,1 +1,6 @@
+torch
 pandas
+librosa
+torchaudio
+transformers
+openai-whisper
