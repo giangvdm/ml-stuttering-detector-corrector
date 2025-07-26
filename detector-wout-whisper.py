@@ -6,6 +6,12 @@ import numpy as np
 import pandas as pd
 import os
 from tqdm import tqdm
+from sklearn.metrics import f1_score
+from dotenv import load_dotenv
+
+# --- Jargon Check ---
+# F1-Score: A metric that balances precision (low false positives) and recall (low false negatives). Ideal for imbalanced datasets.
+# Macro Average: Calculates the metric for each class independently and then takes the unweighted average. Prevents larger classes from dominating the score.
 
 class Wav2Vec2Encoder(nn.Module):
     """Acoustic stream using Wav2Vec2.0 for extracting acoustic embeddings."""
@@ -77,6 +83,7 @@ class DysfluencyDetectorSEP(nn.Module):
         super().__init__()
         self.device = device
         self.wav2vec_encoder = Wav2Vec2Encoder().to(device)
+        # We remove Whisper from the main model to allow for pre-computation
         self.bert_encoder = BertLinguisticEncoder().to(device)
         self.feature_fusion = FeatureFusion().to(device)
         self.classifier = BiLSTMAttentionClassifier(num_classes=num_classes).to(device)
@@ -93,7 +100,7 @@ class DysfluencyDetectorSEP(nn.Module):
 class SEP28kDataset(torch.utils.data.Dataset):
     """Dataset class that now loads pre-computed transcripts."""
     def __init__(self, csv_file, audio_root_dir):
-        self.df = pd.read_csv(csv_file).dropna(subset=['transcript']) # Drop rows where transcription failed
+        self.df = pd.read_csv(csv_file).dropna(subset=['transcript'])
         self.audio_root_dir = audio_root_dir
         self.labels = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'Fluent']
         
@@ -104,14 +111,8 @@ class SEP28kDataset(torch.utils.data.Dataset):
         row = self.df.iloc[idx]
         audio_path = os.path.join(self.audio_root_dir, row['filepath'])
 
-        # --- ADDED CHECK ---
-        # If the audio file does not exist, return None.
-        # The collate_fn will handle this by skipping the item.
         if not os.path.exists(audio_path):
-            # It's good practice to log or print a warning for debugging.
-            # print(f"Warning: File not found, skipping: {audio_path}")
             return None
-        # --- END OF CHECK ---
 
         waveform, sr = torchaudio.load(audio_path)
         if sr != 16000:
@@ -125,18 +126,14 @@ class SEP28kDataset(torch.utils.data.Dataset):
 
 def collate_fn(batch):
     """Custom collate function to handle variable length audio and text."""
-    # --- ADDED FILTER ---
-    # Filter out None items which are returned by __getitem__ when a file is missing.
     batch = [item for item in batch if item is not None]
     if not batch:
-        return None # Return None if the whole batch was invalid
-    # --- END OF FILTER ---
+        return None
 
     waveforms = [item['waveform'] for item in batch]
     transcripts = [item['transcript'] for item in batch]
     labels = torch.stack([item['label'] for item in batch])
     
-    # Pad waveforms to the same length
     padded_waveforms = nn.utils.rnn.pad_sequence(waveforms, batch_first=True)
     
     return {'waveforms': padded_waveforms, 'transcripts': transcripts, 'labels': labels}
@@ -147,7 +144,8 @@ class SEP28kTrainer:
         self.model = model
         self.device = device
         self.criterion = nn.BCEWithLogitsLoss()
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-5)
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
+        self.labels = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'Fluent']
         
     def train_step(self, batch):
         self.model.train()
@@ -166,17 +164,15 @@ class SEP28kTrainer:
         return loss.item()
 
     def evaluate(self, dataloader):
+        """Evaluate model on validation set using F1-score."""
         self.model.eval()
         total_loss = 0
         all_preds, all_labels = [], []
         
         with torch.no_grad():
             for batch in dataloader:
-                # --- ADDED CHECK ---
-                # Skip if the batch is empty (all files were missing)
                 if batch is None:
                     continue
-                # --- END OF CHECK ---
                 waveforms = batch['waveforms'].to(self.device)
                 transcripts = batch['transcripts']
                 labels = batch['labels'].to(self.device)
@@ -190,52 +186,62 @@ class SEP28kTrainer:
                 all_labels.append(labels.cpu())
 
         if not all_preds:
-            return 0, 0 # Handle case where validation set is empty or all files are missing
+            return 0, 0, {}
 
-        all_preds = torch.cat(all_preds)
-        all_labels = torch.cat(all_labels)
-        accuracy = (all_preds == all_labels).all(dim=1).float().mean().item()
+        all_preds = torch.cat(all_preds).numpy()
+        all_labels = torch.cat(all_labels).numpy()
+        
+        # --- NEW METRICS ---
+        # Calculate the macro-averaged F1 score. This is the main performance metric.
+        macro_f1 = f1_score(all_labels, all_preds, average='macro', zero_division=0)
+        
+        # Calculate the F1 score for each class individually for detailed analysis.
+        per_class_f1 = f1_score(all_labels, all_preds, average=None, zero_division=0)
+        per_class_f1_dict = {label: score for label, score in zip(self.labels, per_class_f1)}
+        
         avg_loss = total_loss / len(dataloader)
         
-        return avg_loss, accuracy
+        return avg_loss, macro_f1, per_class_f1_dict
 
 def run_training_loop(trainer, train_loader, val_loader, num_epochs):
-    best_val_accuracy = 0.0
+    best_val_f1 = 0.0
     for epoch in range(num_epochs):
         print(f"\n--- Epoch {epoch+1}/{num_epochs} ---")
         
         trainer.model.train()
         train_losses = []
-        # Use tqdm for a training progress bar
         for batch in tqdm(train_loader, desc=f"Epoch {epoch+1} Training"):
-            # --- ADDED CHECK ---
-            # Skip if the batch is empty (all files were missing)
             if batch is None:
                 continue
-            # --- END OF CHECK ---
             loss = trainer.train_step(batch)
             train_losses.append(loss)
         
         avg_train_loss = np.mean(train_losses)
-        print(f"  Average Training Loss: {avg_train_loss:.4f}")
+        print(f"\n  Average Training Loss: {avg_train_loss:.4f}")
         
         print("  Validating...")
-        val_loss, val_accuracy = trainer.evaluate(val_loader)
-        print(f"  Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.4f}")
+        val_loss, macro_f1, per_class_f1 = trainer.evaluate(val_loader)
+        
+        print(f"  Validation Loss: {val_loss:.4f}, Validation Macro F1-Score: {macro_f1:.4f}")
+        print("  Per-Class F1 Scores:")
+        for label, score in per_class_f1.items():
+            print(f"    {label}: {score:.4f}")
 
-        if val_accuracy > best_val_accuracy:
-            best_val_accuracy = val_accuracy
+        if macro_f1 > best_val_f1:
+            best_val_f1 = macro_f1
             torch.save(trainer.model.state_dict(), 'best_dysfluency_model.pth')
-            print(f"  New best model saved! (Validation Accuracy: {val_accuracy:.4f})")
+            print(f"  New best model saved! (Validation Macro F1: {macro_f1:.4f})")
 
 if __name__ == "__main__":
+    load_dotenv()
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
 
     model = DysfluencyDetectorSEP(num_classes=6, device=device)
 
-    csv_file = "sep28k_labels_with_transcripts.csv"
-    audio_root_dir = "." 
+    csv_file = os.getenv("TRANSCRIBED_LABEL_FILE_NAME")
+    audio_root_dir = os.getenv("DATASET_ROOT_DIR") 
     
     if not os.path.exists(csv_file):
         print(f"ERROR: Transcript file not found at '{csv_file}'. Please run the transcription script first.")
@@ -256,7 +262,6 @@ if __name__ == "__main__":
         print(f"  Validation set size: {len(val_dataset)}")
         print(f"  Test set size: {len(test_dataset)}")
         
-        # Now we can use a larger batch size for faster training.
         batch_size = 16 
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
         val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, collate_fn=collate_fn)
