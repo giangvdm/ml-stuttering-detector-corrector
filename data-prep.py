@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+from dotenv import load_dotenv
 
 def preprocess_sep28k_labels(input_csv_path, output_csv_path, clips_root_dir="clips"):
     """
@@ -32,7 +33,7 @@ def preprocess_sep28k_labels(input_csv_path, output_csv_path, clips_root_dir="cl
 
     # --- 1.2 Filter for specific shows ---
     # Define the list of show names you want to keep.
-    shows_to_keep = ["HeStutters", "HVSA", "MyStutteringLife", "StutterTalk", "WomenWhoStutter"] 
+    shows_to_keep = ["HeStutters", "HVSA", "MyStutteringLife", "StutteringIsCool", "StutterTalk", "WomenWhoStutter"] 
     df = df[df['Show'].isin(shows_to_keep)]
     print(f"Dataset size after filtering for specific shows {shows_to_keep}: {len(df)} rows")
 
@@ -85,8 +86,12 @@ def preprocess_sep28k_labels(input_csv_path, output_csv_path, clips_root_dir="cl
 
 
 if __name__ == "__main__":
+    load_dotenv()
+
     # Define the input and output file paths
-    raw_labels_file = "ml-stuttering-events-dataset/SEP-28k_labels.csv"
-    processed_labels_file = "sep28k_labels_processed.csv"
+    dataset_root_dir = os.getenv("DATASET_ROOT_DIR")
+    raw_labels_file = os.getenv("RAW_LABEL_FILE_NAME")
+    raw_labels_file = os.path.join(dataset_root_dir, raw_labels_file)
+    processed_labels_file = os.getenv("PROCESSED_LABEL_FILE_NAME")
 
     preprocess_sep28k_labels(raw_labels_file, processed_labels_file)
