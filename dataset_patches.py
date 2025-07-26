@@ -11,7 +11,10 @@ def fix_stuttering_is_cool_links(input_file='SEP-28k_episodes.csv'):
         input_file (str): The path to the original CSV file.
     """
     load_dotenv()
+    dataset_root_dir = os.getenv("DATASET_ROOT_DIR")
+    input_file = os.path.join(dataset_root_dir, input_file)
     output_file = os.getenv("SEP28K_EPISODE_FILE_NAME")
+    output_file = os.path.join(dataset_root_dir, output_file)
 
     try:
         with open(input_file, mode='r', newline='', encoding='utf-8') as infile, \
