@@ -2,6 +2,7 @@ torch
 pandas
 dotenv
 librosa
+kagglehub
 torchaudio
 transformers
 openai-whisper
