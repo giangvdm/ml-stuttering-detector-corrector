@@ -5,14 +5,14 @@ import os
 from tqdm import tqdm
 from dotenv import load_dotenv
 
-def generate_transcripts(input_csv, output_csv, audio_root_dir="."):
+def generate_transcripts(input_csv, output_csv, audio_root_dir):
     """
     Generates transcripts for all audio files in a processed CSV and saves them to a new file.
 
     Args:
-        input_csv (str): Path to the processed labels CSV (e.g., 'sep28k_labels_processed.csv').
+        input_csv (str): Path to the processed labels CSV.
         output_csv (str): Path to save the new CSV with a 'transcript' column.
-        audio_root_dir (str): The root directory where the 'clips' folder is located.
+        audio_root_dir (str): The root directory where all audio files reside.
     """
     try:
         df = pd.read_csv(input_csv)
@@ -36,7 +36,7 @@ def generate_transcripts(input_csv, output_csv, audio_root_dir="."):
                 transcripts.append(result['text'])
             except Exception as e:
                 print(f"Could not transcribe {audio_path}. Error: {e}")
-                transcripts.append("") # Append empty string on error
+                transcripts.append("")
         else:
             print(f"File not found: {audio_path}")
             transcripts.append("")
@@ -53,8 +53,10 @@ def generate_transcripts(input_csv, output_csv, audio_root_dir="."):
 if __name__ == "__main__":
     load_dotenv()
 
-    processed_labels_file = os.getenv("PROCESSED_LABEL_FILE_NAME")
-    final_dataset_file = os.getenv("TRANSCRIBED_LABEL_FILE_NAME")
-    audio_root_dir = os.getenv("DATASET_ROOT_DIR")
+    dataset_root_dir = os.getenv("DATASET_ROOT_DIR")
+    audio_root_dir = os.getenv("AUDIO_ROOT_DIR")
+    real_audio_root_dir = os.path.join(dataset_root_dir, audio_root_dir)
+    all_labels_file = os.getenv("PROCESSED_LABEL_FILE_NAME")
+    transcribed_labels_file = os.getenv("TRANSCRIBED_LABEL_FILE_NAME")
     
-    generate_transcripts(processed_labels_file, final_dataset_file, audio_root_dir)
+    generate_transcripts(all_labels_file, transcribed_labels_file, real_audio_root_dir)
