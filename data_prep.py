@@ -3,7 +3,7 @@ import os
 import kagglehub
 from dotenv import load_dotenv
 
-def preprocess_labels(input_csv_path, base_audio_path):
+def preprocess_labels(input_csv_path, output_csv_path, base_audio_path):
     """
     Preprocesses the label data from a CSV file.
 
@@ -13,6 +13,7 @@ def preprocess_labels(input_csv_path, base_audio_path):
 
     Args:
         input_csv_path (str): The path to the input CSV file.
+        output_csv_path (str): The path to the output, processed CSV file.
         base_audio_path (str): The base directory path where audio clips are stored.
 
     Returns:
@@ -39,7 +40,6 @@ def preprocess_labels(input_csv_path, base_audio_path):
 
     # --- 2. Define the target classes for dysfluencies ---
     dysfluency_classes = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
-    # all_classes = dysfluency_classes + ['NoStutteredWords']
 
     # --- 3. Create a new DataFrame to store processed data ---
     processed_data = []
@@ -51,18 +51,11 @@ def preprocess_labels(input_csv_path, base_audio_path):
         filepath = os.path.join(base_audio_path, filename)
 
         # b. Binarize the labels (any value > 0 becomes 1)
-        # is_dysfluent = False
         label_vector = {}
         for label in dysfluency_classes:
             # If at least one annotator marked the label, we consider it present.
             is_present = 1 if row[label] > 0 else 0
-            # if is_present == 1:
-                # is_dysfluent = True
             label_vector[label] = is_present
-
-        # c. Determine the 'Fluent' label
-        # A clip is considered fluent if no dysfluency labels were marked.
-        # label_vector['NoStutteredWords'] = 1 if not is_dysfluent else 0
 
         # d. Append the processed info to our list
         processed_row = {'filepath': filepath}
@@ -77,46 +70,17 @@ def preprocess_labels(input_csv_path, base_audio_path):
     processed_df = processed_df[final_columns]
 
     print(f"Processed {len(processed_df)} records from {input_csv_path}")
+    print("\n--- Sample of Merged Data ---")
+    print(processed_df.head())
     print("--- Label Distribution ---")
     print(processed_df[dysfluency_classes].sum())
-    
-    return processed_df
 
-
-def merge_and_save_datasets(csv_files, audio_root_dir, output_csv_path):
-    """
-    Process multiple CSV files and merge them into a single output file.
+    print(f"Saving merged data to: {output_csv_path}")
+    processed_df.to_csv(output_csv_path, index=False)
+    print(f"Also saved a copy to current directory for quick reference")
+    processed_df.to_csv("./all_labels.csv", index=False)
     
-    Args:
-        csv_files (list): List of input CSV file paths
-        audio_root_dir (str): Path where all audio files reside
-        output_csv_path (str): Path where the merged CSV should be saved
-    """
-    all_processed_data = []
-    
-    for csv_file in csv_files:
-        processed_df = preprocess_labels(csv_file, audio_root_dir)
-        if processed_df is not None:
-            all_processed_data.append(processed_df)
-            print(f"Successfully processed {len(processed_df)} records from {csv_file}\n")
-    
-    if all_processed_data:
-        # Merge all DataFrames
-        merged_df = pd.concat(all_processed_data, ignore_index=True)
-        
-        print(f"Total merged dataset size: {len(merged_df)} rows")
-        print(f"Saving merged data to: {output_csv_path}")
-        merged_df.to_csv(output_csv_path, index=False)
-        print(f"Also saved a copy to current directory for quick reference")
-        merged_df.to_csv("./all_labels.csv", index=False)
-        
-        print("Preprocessing complete.")
-        print("\n--- Sample of Merged Data ---")
-        print(merged_df.head())
-        print("\n--- Final Label Distribution ---")
-        print(merged_df[['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']].sum())
-    else:
-        print("ERROR: No data was successfully processed from any input files.")
+    return True
 
 
 if __name__ == "__main__":
@@ -125,19 +89,15 @@ if __name__ == "__main__":
     dataset_root_dir = os.getenv("DATASET_ROOT_DIR")
     audio_root_dir = os.getenv("AUDIO_ROOT_DIR")
     real_audio_root_dir = os.path.join(dataset_root_dir, audio_root_dir)
-    sep28k_labels_file = os.getenv("SEP28K_LABEL_FILE_NAME")
-    fluencybank_labels_file = os.getenv("FLUENCYBANK_LABEL_FILE_NAME")
+    merged_labels_file = os.getenv("MERGED_LABEL_FILE_NAME")
+    merged_labels_file = os.path.join(dataset_root_dir, merged_labels_file)
     all_labels_file = os.getenv("PROCESSED_LABEL_FILE_NAME")
-    
-    csv_files = [
-        os.path.join(dataset_root_dir, sep28k_labels_file),
-        os.path.join(dataset_root_dir, fluencybank_labels_file)
-    ]
+    all_labels_file = os.path.join(dataset_root_dir, all_labels_file)
     
     output_path = os.path.join(dataset_root_dir, all_labels_file)
 
     # Download latest version
-    path = kagglehub.dataset_download("ikrbasak/sep-28k")
+    path = kagglehub.dataset_download("vudominhgiang/sep-28k-maintained")
     print("Path to dataset files:", path)
     
-    merge_and_save_datasets(csv_files, real_audio_root_dir, output_path)
+    preprocess_labels(merged_labels_file, output_path, real_audio_root_dir)
