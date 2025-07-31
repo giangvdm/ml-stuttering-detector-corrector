@@ -51,18 +51,11 @@ def preprocess_labels(input_csv_path, base_audio_path):
         filepath = os.path.join(base_audio_path, filename)
 
         # b. Binarize the labels (any value > 0 becomes 1)
-        # is_dysfluent = False
         label_vector = {}
         for label in dysfluency_classes:
             # If at least one annotator marked the label, we consider it present.
             is_present = 1 if row[label] > 0 else 0
-            # if is_present == 1:
-                # is_dysfluent = True
             label_vector[label] = is_present
-
-        # c. Determine the 'Fluent' label
-        # A clip is considered fluent if no dysfluency labels were marked.
-        # label_vector['NoStutteredWords'] = 1 if not is_dysfluent else 0
 
         # d. Append the processed info to our list
         processed_row = {'filepath': filepath}
