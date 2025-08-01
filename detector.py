@@ -82,12 +82,11 @@ if __name__ == "__main__":
     model = DysfluencyDetector(num_classes=6, device=device)
 
     csv_file = os.getenv("TRANSCRIBED_LABEL_FILE_NAME")
-    audio_root_dir = os.getenv("DATASET_ROOT_DIR") 
     
     if not os.path.exists(csv_file):
         print(f"ERROR: Transcript file not found at '{csv_file}'. Please run the transcription script first.")
     else:
-        dataset = SEP28kDataset(csv_file=csv_file, audio_root_dir=audio_root_dir)
+        dataset = SEP28kDataset(csv_file=csv_file)
         
         dataset_size = len(dataset)
         train_size = int(0.8 * dataset_size)
@@ -103,13 +102,13 @@ if __name__ == "__main__":
         print(f"  Validation set size: {len(val_dataset)}")
         print(f"  Test set size: {len(test_dataset)}")
         
-        batch_size = 16 
+        batch_size = 128
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
         val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, collate_fn=collate_fn)
 
         trainer = SEP28kTrainer(model, device=device)
 
-        num_training_epochs = 5
+        num_training_epochs = 50
         run_training_loop(trainer, train_dataloader, val_dataloader, num_epochs=num_training_epochs)
         
         print("\nTraining complete.")

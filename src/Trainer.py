@@ -9,7 +9,7 @@ class SEP28kTrainer:
         self.device = device
         self.criterion = nn.BCEWithLogitsLoss()
         self.optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
-        self.labels = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'Fluent']
+        self.labels = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
         
     def train_step(self, batch):
         self.model.train()
