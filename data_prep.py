@@ -29,13 +29,21 @@ def preprocess_labels(input_csv_path, output_csv_path, base_audio_path):
 
     print(f"Original dataset size: {len(df)} rows")
 
-    # --- 1. Drop records with least distributed, irrelevant labels ---
-    labels_to_drop = ['Unsure', 'NoSpeech', 'PoorAudioQuality', 'Music']
+    # --- 1. Drop records with least contribution, irrelevant labels ---
+    labels_to_drop = ['Unsure', 'NoSpeech', 'Music']
     
     # Drop rows where any of these labels have a value > 0
     for label in labels_to_drop:
         if label in df.columns:
             df = df[df[label] == 0]
+            print(f"Dataset size after dropping '{label}' records: {len(df)} rows")
+
+    # Also drop rows where any of these labels have value = 3
+    labels_with_3_agreements = ['PoorAudioQuality']
+
+    for label in labels_with_3_agreements:
+        if label in df.columns:
+            df = df[df[label] < 3]
             print(f"Dataset size after dropping '{label}' records: {len(df)} rows")
 
     # --- 2. Define the target classes for dysfluencies ---
