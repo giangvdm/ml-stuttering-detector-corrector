@@ -20,6 +20,39 @@ class SEP28kDataset(torch.utils.data.Dataset):
         # Validate target_disfluency if specified
         if target_disfluency and target_disfluency not in self.disfluency_labels:
             raise ValueError(f"target_disfluency must be one of {self.disfluency_labels}")
+        
+        # Filter out invalid audio files
+        print(f"Validating audio files...")
+        print(f"Original dataset size: {len(self.df)}")
+        
+        valid_indices = []
+        for idx, row in self.df.iterrows():
+            try:
+                # Quick validation without full loading
+                audio_path = row['filepath']
+                if not os.path.exists(audio_path):
+                    continue
+                    
+                # Load and check basic properties
+                waveform, sr = torchaudio.load(audio_path)
+                
+                # Check if audio is valid
+                if (waveform.numel() > 1000 and  # At least 1000 samples
+                    torch.isfinite(waveform).all() and  # No NaN/Inf values
+                    waveform.abs().max() > 1e-6):  # Not silent
+                    valid_indices.append(idx)
+                else:
+                    print(f"Invalid audio: {audio_path}")
+                    
+            except Exception as e:
+                print(f"Error loading {row['filepath']}: {e}")
+        
+        # Keep only valid samples
+        self.df = self.df.iloc[valid_indices].reset_index(drop=True)
+        removed_count = len(self.df) - len(self.df)
+        
+        print(f"Removed {removed_count} invalid audio files")
+        print(f"Final dataset size: {len(self.df)}")
 
     def __len__(self):
         return len(self.df)
@@ -33,6 +66,16 @@ class SEP28kDataset(torch.utils.data.Dataset):
         if sr != 16000:
             resampler = torchaudio.transforms.Resample(sr, 16000)
             waveform = resampler(waveform)
+
+        # Standardize length to exactly 3 seconds (48000 samples at 16kHz)
+        target_length = 48000
+        if waveform.shape[-1] > target_length:
+            # Truncate if too long
+            waveform = waveform[..., :target_length]
+        elif waveform.shape[-1] < target_length:
+            # Pad if too short
+            padding = target_length - waveform.shape[-1]
+            waveform = torch.nn.functional.pad(waveform, (0, padding), 'constant', 0)
         
         # Prepare labels based on target_disfluency
         if self.target_disfluency:
