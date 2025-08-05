@@ -54,12 +54,12 @@ def preprocess_labels(input_csv_path, output_csv_path, base_audio_path):
     #         print(f"  After filtering high-confidence '{label}' samples: {len(df)} rows (-{initial_size - len(df)})")
     #         initial_size = len(df)
 
-    # --- 3. Define the target classes for dysfluencies ---
+    # --- 2. Define the target classes for dysfluencies ---
     dysfluency_classes = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection']
     fluent_classes = ['NoStutteredWords']  # Keep separate for clarity
     all_target_classes = dysfluency_classes + fluent_classes
 
-    # --- 4. Apply ≥2 annotator agreement threshold for dysfluent labels ---
+    # --- 3. Apply ≥2 annotator agreement threshold for dysfluent labels ---
     print("\n--- Applying ≥2 Annotator Agreement Filtering ---")
     
     # Create boolean masks for high-confidence samples
@@ -76,7 +76,7 @@ def preprocess_labels(input_csv_path, output_csv_path, base_audio_path):
     fluent_samples = fluent_mask.sum()
     print(f"  NoStutteredWords: {fluent_samples} high-confidence fluent samples")
 
-    # --- 5. Create quality-filtered dataset ---
+    # --- 4. Create quality-filtered dataset ---
     # Keep samples that have high confidence in AT LEAST ONE category
     any_high_confidence = pd.Series([False] * len(df), index=df.index)
     for mask in high_confidence_masks.values():
@@ -86,7 +86,7 @@ def preprocess_labels(input_csv_path, output_csv_path, base_audio_path):
     print(f"\nDataset after quality filtering: {len(filtered_df)} rows")
     print(f"Reduction: {len(df) - len(filtered_df)} samples ({((len(df) - len(filtered_df))/len(df)*100):.1f}%)")
 
-    # --- 6. Create processed data with binary labels ---
+    # --- 5. Create processed data with binary labels ---
     processed_data = []
     
     print("\n--- Creating Binary Labels ---")
@@ -115,12 +115,23 @@ def preprocess_labels(input_csv_path, output_csv_path, base_audio_path):
         
         processed_data.append(processed_row)
 
-    # --- 7. Create final DataFrame and perform sanity checks ---
+    # --- 6. Create final DataFrame and perform sanity checks ---
     processed_df = pd.DataFrame(processed_data)
     
     # Reorder columns for clarity
     final_columns = ['filepath'] + all_target_classes
     processed_df = processed_df[final_columns]
+
+    # --- 7. Filter out data with missing audio files ---
+    valid_files_mask = processed_df['filepath'].apply(os.path.exists)
+    processed_df = processed_df[valid_files_mask].reset_index(drop=True)
+    missing_count = (~valid_files_mask).sum()
+
+    if missing_count > 0:
+        print(f"Removed {missing_count} samples with missing audio files")
+    else:
+        print(f"No missing audio files - 0 rows removed")
+    print(f"Dataset after missing file filtering: {len(processed_df)} rows")
 
     # --- 8. Data quality report ---
     print(f"\n--- Final Dataset Statistics ---")
@@ -143,7 +154,7 @@ def preprocess_labels(input_csv_path, output_csv_path, base_audio_path):
     processed_df.to_csv(output_csv_path, index=False)
     
     # Also save a copy locally for quick reference
-    local_copy = "./high_quality_labels.csv"
+    local_copy = "./all_labels.csv"
     processed_df.to_csv(local_copy, index=False)
     print(f"Local copy saved to: {local_copy}")
     
