@@ -1,0 +1,98 @@
+2025-08-10 18:53:46,852 - INFO - Loaded 24250 valid audio files
+2025-08-10 18:53:46,854 - INFO - Class 0 (NoStutter): 10871 samples (44.8%)
+2025-08-10 18:53:46,854 - INFO - Class 1 (WordRep): 2737 samples (11.3%)
+2025-08-10 18:53:46,855 - INFO - Class 2 (SoundRep): 2063 samples (8.5%)
+2025-08-10 18:53:46,855 - INFO - Class 3 (Prolongation): 2367 samples (9.8%)
+2025-08-10 18:53:46,855 - INFO - Class 4 (Interjection): 4313 samples (17.8%)
+2025-08-10 18:53:46,855 - INFO - Class 5 (Block): 1899 samples (7.8%)
+2025-08-10 18:56:22,954 - INFO - Loaded 24250 valid audio files
+2025-08-10 18:56:22,955 - INFO - Class 0 (NoStutter): 10871 samples (44.8%)
+2025-08-10 18:56:22,956 - INFO - Class 1 (WordRep): 2737 samples (11.3%)
+2025-08-10 18:56:22,956 - INFO - Class 2 (SoundRep): 2063 samples (8.5%)
+2025-08-10 18:56:22,956 - INFO - Class 3 (Prolongation): 2367 samples (9.8%)
+2025-08-10 18:56:22,957 - INFO - Class 4 (Interjection): 4313 samples (17.8%)
+2025-08-10 18:56:22,957 - INFO - Class 5 (Block): 1899 samples (7.8%)
+2025-08-10 19:12:20,086 - INFO - Loaded 24250 valid audio files
+2025-08-10 19:12:20,088 - INFO - Class 0 (NoStutter): 10871 samples (44.8%)
+2025-08-10 19:12:20,088 - INFO - Class 1 (WordRep): 2737 samples (11.3%)
+2025-08-10 19:12:20,088 - INFO - Class 2 (SoundRep): 2063 samples (8.5%)
+2025-08-10 19:12:20,089 - INFO - Class 3 (Prolongation): 2367 samples (9.8%)
+2025-08-10 19:12:20,089 - INFO - Class 4 (Interjection): 4313 samples (17.8%)
+2025-08-10 19:12:20,089 - INFO - Class 5 (Block): 1899 samples (7.8%)
+2025-08-10 19:16:37,647 - INFO - Loaded 24250 valid audio files
+2025-08-10 19:16:37,648 - INFO - Class 0 (NoStutter): 10871 samples (44.8%)
+2025-08-10 19:16:37,649 - INFO - Class 1 (WordRep): 2737 samples (11.3%)
+2025-08-10 19:16:37,649 - INFO - Class 2 (SoundRep): 2063 samples (8.5%)
+2025-08-10 19:16:37,649 - INFO - Class 3 (Prolongation): 2367 samples (9.8%)
+2025-08-10 19:16:37,649 - INFO - Class 4 (Interjection): 4313 samples (17.8%)
+2025-08-10 19:16:37,649 - INFO - Class 5 (Block): 1899 samples (7.8%)
+2025-08-10 19:17:43,193 - INFO - Starting training...
+2025-08-10 19:17:43,194 - INFO - Model has 62,503,174 trainable parameters
+2025-08-10 19:17:43,194 - INFO - Model has 10,223,616 frozen parameters
+2025-08-10 19:17:43,194 - INFO - 
+Epoch 1/10
+2025-08-10 19:27:02,403 - INFO - Loaded 24250 valid audio files
+2025-08-10 19:27:02,405 - INFO - Class 0 (NoStutter): 10871 samples (44.8%)
+2025-08-10 19:27:02,405 - INFO - Class 1 (WordRep): 2737 samples (11.3%)
+2025-08-10 19:27:02,406 - INFO - Class 2 (SoundRep): 2063 samples (8.5%)
+2025-08-10 19:27:02,406 - INFO - Class 3 (Prolongation): 2367 samples (9.8%)
+2025-08-10 19:27:02,406 - INFO - Class 4 (Interjection): 4313 samples (17.8%)
+2025-08-10 19:27:02,407 - INFO - Class 5 (Block): 1899 samples (7.8%)
+2025-08-10 19:28:04,209 - INFO - Starting training...
+2025-08-10 19:28:04,210 - INFO - Model has 62,503,174 trainable parameters
+2025-08-10 19:28:04,210 - INFO - Model has 10,223,616 frozen parameters
+2025-08-10 19:28:04,210 - INFO - 
+Epoch 1/10
+2025-08-10 19:35:42,311 - INFO - Train Loss: 1.2429
+2025-08-10 19:35:42,312 - INFO - Val Loss: 1.1307
+2025-08-10 19:35:42,312 - INFO - Val F1 (weighted): 0.5764
+2025-08-10 19:35:45,119 - INFO - New best model saved! F1: 0.5764
+2025-08-10 19:35:45,120 - INFO - 
+Epoch 2/10
+2025-08-10 19:43:23,453 - INFO - Train Loss: 1.0067
+2025-08-10 19:43:23,453 - INFO - Val Loss: 1.0362
+2025-08-10 19:43:23,453 - INFO - Val F1 (weighted): 0.6103
+2025-08-10 19:43:25,025 - INFO - New best model saved! F1: 0.6103
+2025-08-10 19:43:25,025 - INFO - 
+Epoch 3/10
+2025-08-10 19:51:03,480 - INFO - Train Loss: 0.8759
+2025-08-10 19:51:03,481 - INFO - Val Loss: 1.0335
+2025-08-10 19:51:03,481 - INFO - Val F1 (weighted): 0.6202
+2025-08-10 19:51:04,890 - INFO - New best model saved! F1: 0.6202
+2025-08-10 19:51:04,891 - INFO - 
+Epoch 4/10
+2025-08-10 19:58:43,381 - INFO - Train Loss: 0.7702
+2025-08-10 19:58:43,382 - INFO - Val Loss: 1.0351
+2025-08-10 19:58:43,382 - INFO - Val F1 (weighted): 0.6258
+2025-08-10 19:58:47,182 - INFO - New best model saved! F1: 0.6258
+2025-08-10 19:58:47,183 - INFO - 
+Epoch 5/10
+2025-08-10 20:06:26,160 - INFO - Train Loss: 0.6565
+2025-08-10 20:06:26,160 - INFO - Val Loss: 1.0627
+2025-08-10 20:06:26,160 - INFO - Val F1 (weighted): 0.6344
+2025-08-10 20:06:27,858 - INFO - New best model saved! F1: 0.6344
+2025-08-10 20:06:27,860 - INFO - 
+Epoch 6/10
+2025-08-10 20:14:06,816 - INFO - Train Loss: 0.5273
+2025-08-10 20:14:06,816 - INFO - Val Loss: 1.1431
+2025-08-10 20:14:06,817 - INFO - Val F1 (weighted): 0.6339
+2025-08-10 20:14:06,817 - INFO - 
+Epoch 7/10
+2025-08-10 20:21:45,832 - INFO - Train Loss: 0.4214
+2025-08-10 20:21:45,833 - INFO - Val Loss: 1.2803
+2025-08-10 20:21:45,833 - INFO - Val F1 (weighted): 0.6291
+2025-08-10 20:21:45,833 - INFO - 
+Epoch 8/10
+2025-08-10 20:29:25,177 - INFO - Train Loss: 0.3225
+2025-08-10 20:29:25,178 - INFO - Val Loss: 1.5351
+2025-08-10 20:29:25,179 - INFO - Val F1 (weighted): 0.6133
+2025-08-10 20:29:25,179 - INFO - 
+Epoch 9/10
+2025-08-10 20:37:02,218 - INFO - Train Loss: 0.2631
+2025-08-10 20:37:02,219 - INFO - Val Loss: 1.6048
+2025-08-10 20:37:02,219 - INFO - Val F1 (weighted): 0.6168
+2025-08-10 20:37:02,219 - INFO - 
+Epoch 10/10
+2025-08-10 20:44:37,276 - INFO - Train Loss: 0.1769
+2025-08-10 20:44:37,276 - INFO - Val Loss: 1.7659
+2025-08-10 20:44:37,276 - INFO - Val F1 (weighted): 0.6173

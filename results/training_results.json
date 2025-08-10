@@ -1,0 +1,7 @@
+{
+  "strategy": "strategy1",
+  "best_f1": 0.6344259372972318,
+  "final_f1": 0.6172833430868836,
+  "trainable_params": 62503174,
+  "frozen_params": 10223616
+}
