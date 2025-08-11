@@ -5,7 +5,7 @@ from transformers import WhisperModel, WhisperConfig
 from typing import Optional, Dict, Any
 import numpy as np
 
-class WhisperStutterClassifier(nn.Module):
+class StutteringClassifier(nn.Module):
     """
     Whisper-based stuttering classification model following the 'Whisper in Focus' architecture.
     
@@ -19,7 +19,7 @@ class WhisperStutterClassifier(nn.Module):
     def __init__(
         self,
         model_name: str = "openai/whisper-base",
-        num_classes: int = 6,  # No stutter, word rep, sound rep, prolongation, interjection, block
+        num_classes: int = 6,
         projection_dim: int = 256,
         dropout_rate: float = 0.1,
         freeze_strategy: str = "base",  # "base", "strategy1", "strategy2"
@@ -78,14 +78,14 @@ class WhisperStutterClassifier(nn.Module):
             # No freezing - all layers trainable
             return
         
-        elif strategy == "strategy1":
+        elif strategy == "1":
             # Freeze first 3 encoder layers, keep last 3 trainable
             for i, layer in enumerate(self.encoder.layers):
                 if i < 3:
                     for param in layer.parameters():
                         param.requires_grad = False
                         
-        elif strategy == "strategy2":
+        elif strategy == "2":
             # Freeze last 3 encoder layers, keep first 3 trainable
             for i, layer in enumerate(self.encoder.layers):
                 if i >= 3:
@@ -164,31 +164,3 @@ class WhisperStutterClassifier(nn.Module):
     def get_frozen_parameters(self) -> int:
         """Return the number of frozen parameters."""
         return sum(p.numel() for p in self.parameters() if not p.requires_grad)
-
-
-class DisfluencyClassificationHead(nn.Module):
-    """
-    Enhanced classification head with additional regularization techniques.
-    """
-    
-    def __init__(
-        self,
-        input_dim: int,
-        num_classes: int,
-        hidden_dim: int = 128,
-        dropout_rate: float = 0.1
-    ):
-        super().__init__()
-        
-        self.classifier = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dim // 2, num_classes)
-        )
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.classifier(x)

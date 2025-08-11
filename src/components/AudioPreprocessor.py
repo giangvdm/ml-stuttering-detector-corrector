@@ -1,7 +1,5 @@
 import torch
-import torchaudio
 import numpy as np
-from transformers import WhisperProcessor
 from typing import Union, List, Tuple, Optional
 import librosa
 import warnings
@@ -182,53 +180,3 @@ class AudioPreprocessor:
         tensor_batch = torch.stack([torch.from_numpy(spec) for spec in all_spectrograms])
         
         return tensor_batch, file_identifiers
-
-
-class DataAugmentation:
-    """
-    Audio data augmentation techniques for improving model robustness.
-    """
-    
-    def __init__(self):
-        pass
-    
-    @staticmethod
-    def add_noise(audio: np.ndarray, noise_level: float = 0.005) -> np.ndarray:
-        """Add gaussian noise to audio."""
-        noise = np.random.normal(0, noise_level, audio.shape)
-        return audio + noise
-    
-    @staticmethod
-    def time_stretch(audio: np.ndarray, rate: float = 1.1) -> np.ndarray:
-        """Apply time stretching to audio."""
-        return librosa.effects.time_stretch(audio, rate=rate)
-    
-    @staticmethod
-    def pitch_shift(audio: np.ndarray, sr: int, n_steps: int = 2) -> np.ndarray:
-        """Apply pitch shifting to audio."""
-        return librosa.effects.pitch_shift(audio, sr=sr, n_steps=n_steps)
-    
-    @staticmethod
-    def spec_augment(mel_spec: np.ndarray, freq_mask: int = 10, time_mask: int = 40) -> np.ndarray:
-        """
-        Apply SpecAugment to mel spectrogram.
-        
-        Args:
-            mel_spec: Mel spectrogram [n_mels, time_steps]
-            freq_mask: Maximum frequency mask size
-            time_mask: Maximum time mask size
-        """
-        spec = mel_spec.copy()
-        n_mels, n_frames = spec.shape
-        
-        # Frequency masking
-        f_mask_size = np.random.randint(0, freq_mask)
-        f_start = np.random.randint(0, max(1, n_mels - f_mask_size))
-        spec[f_start:f_start + f_mask_size, :] = 0
-        
-        # Time masking
-        t_mask_size = np.random.randint(0, time_mask)
-        t_start = np.random.randint(0, max(1, n_frames - t_mask_size))
-        spec[:, t_start:t_start + t_mask_size] = 0
-        
-        return spec
