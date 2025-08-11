@@ -1,6 +1,16 @@
 .env
+
+# Media
 *.wav
 *.mp3
 *.m4a
+
+# Data and cache
 *.csv
 __pycache__
+
+# Compressed
+*.pkl
+*.pt
+*.pth
+*.zip
