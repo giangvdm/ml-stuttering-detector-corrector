@@ -43,35 +43,24 @@ def preprocess_labels(input_csv_path, output_csv_path, base_audio_path):
             print(f"  After removing '{label}' samples: {len(df)} rows (-{initial_size - len(df)})")
             initial_size = len(df)
 
-    # # --- 2. More lenient handling of borderline non-dysfluent labels ---
-    # # These can coexist with disfluencies but we want high confidence
-    # borderline_labels = ['DifficultToUnderstand', 'NaturalPause']
-    
-    # for label in borderline_labels:
-    #     if label in df.columns:
-    #         # Only drop if 2+ annotators agreed (less strict)
-    #         df = df[df[label] < 2]
-    #         print(f"  After filtering high-confidence '{label}' samples: {len(df)} rows (-{initial_size - len(df)})")
-    #         initial_size = len(df)
-
     # --- 2. Define the target classes for dysfluencies ---
     dysfluency_classes = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection']
     fluent_classes = ['NoStutteredWords']  # Keep separate for clarity
     all_target_classes = dysfluency_classes + fluent_classes
 
-    # --- 3. Apply ≥2 annotator agreement threshold for dysfluent labels ---
-    print("\n--- Applying ≥2 Annotator Agreement Filtering ---")
+    # --- 3. Apply ≥3 annotator agreement threshold for dysfluent labels ---
+    print("\n--- Applying ≥3 Annotator Agreement Filtering ---")
     
     # Create boolean masks for high-confidence samples
     high_confidence_masks = {}
     for label in dysfluency_classes:
         if label in df.columns:
-            high_confidence_masks[label] = df[label] >= 2
-            positive_samples = (df[label] >= 2).sum()
+            high_confidence_masks[label] = df[label] >= 3
+            positive_samples = (df[label] >= 3).sum()
             print(f"  {label}: {positive_samples} high-confidence positive samples")
 
     # For fluent samples, we want high confidence in the absence of disfluencies
-    fluent_mask = (df['NoStutteredWords'] >= 2)
+    fluent_mask = (df['NoStutteredWords'] >= 3)
     high_confidence_masks['NoStutteredWords'] = fluent_mask
     fluent_samples = fluent_mask.sum()
     print(f"  NoStutteredWords: {fluent_samples} high-confidence fluent samples")
