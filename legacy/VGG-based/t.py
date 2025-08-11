@@ -15,15 +15,15 @@ dataset = SEP28kDataset('all_labels.csv', target_disfluency='Block')
 # print(f"Label type: {type(sample['label'])}")
 # print(f"Audio file: {sample['filepath']}")
 
-# disfluency_types = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection']
+disfluency_types = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection']
 
-# for disfluency in disfluency_types:
-#     splits = SEP28kDataset.create_stratified_splits(
-#         'all_labels.csv',
-#         disfluency,
-#         f'./splits/{disfluency}/'
-#     )
-#     print(f"Created splits for {disfluency}")
+for disfluency in disfluency_types:
+    splits = SEP28kDataset.create_stratified_splits(
+        'all_labels.csv',
+        disfluency,
+        f'./splits/{disfluency}/'
+    )
+    print(f"Created splits for {disfluency}")
 
 # Test the full workflow
 dataset = SEP28kDataset('./splits/Block/Block_train.csv', target_disfluency='Block')
