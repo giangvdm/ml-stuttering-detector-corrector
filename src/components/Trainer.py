@@ -300,12 +300,12 @@ def create_data_loaders(
     
     train_dataset = Sep28kDataset(
         train_spectrograms, train_labels, train_ids, 
-        multi_label=multi_label, augment=True
+        multi_label=multi_label
     )
     
     val_dataset = Sep28kDataset(
         val_spectrograms, val_labels, val_ids, 
-        multi_label=multi_label, augment=False
+        multi_label=multi_label
     )
     
     train_loader = DataLoader(

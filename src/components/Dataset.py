@@ -1,15 +1,7 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from sklearn.metrics import f1_score, classification_report, confusion_matrix, precision_score, recall_score
 import numpy as np
 from typing import Dict, List, Tuple, Optional
-import logging
-from tqdm import tqdm
-import json
-import os
-from pathlib import Path
 
 
 class Sep28kDataset(Dataset):
@@ -33,14 +25,12 @@ class Sep28kDataset(Dataset):
         labels: List,  # Can be List[int] for single-label or List[List[int]] for multi-label
         file_ids: List[str],
         multi_label: bool = False,
-        augment: bool = False,
         augmentation_prob: float = 0.3
     ):
         self.spectrograms = spectrograms
         self.labels = labels
         self.file_ids = file_ids
         self.multi_label = multi_label
-        self.augment = augment
         self.augmentation_prob = augmentation_prob
         
         assert len(spectrograms) == len(labels) == len(file_ids)
@@ -62,12 +52,6 @@ class Sep28kDataset(Dataset):
         spectrogram = self.spectrograms[idx].copy()
         label = self.labels[idx]
         file_id = self.file_ids[idx]
-        
-        # Apply augmentation if enabled
-        if self.augment and np.random.random() < self.augmentation_prob:
-            # Apply SpecAugment
-            from audio_preprocessing import DataAugmentation
-            spectrogram = DataAugmentation.spec_augment(spectrogram)
         
         if self.multi_label:
             # Multi-label: return binary vector
