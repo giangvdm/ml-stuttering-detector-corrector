@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from src.components.Dataset import Sep28kDataset
 
+DYSFLUENT_CLASSES = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
+
 class StutteringDetectorTrainer:
     """
     Training pipeline for Whisper-based stuttering classification.
@@ -131,7 +133,7 @@ class StutteringDetectorTrainer:
             pos_weights = torch.where(class_counts > 0, pos_weights, torch.tensor(1.0))
             
             self.logger.info("Multi-label positive class weights:")
-            class_names = ["NoStutter", "WordRep", "SoundRep", "Prolongation", "Interjection", "Block"]
+            class_names = DYSFLUENT_CLASSES
             for i, (name, weight) in enumerate(zip(class_names, pos_weights)):
                 self.logger.info(f"  {name}: {weight:.4f} (positive samples: {class_counts[i]:.0f})")
             
@@ -154,7 +156,7 @@ class StutteringDetectorTrainer:
             class_weights = torch.where(class_counts > 0, class_weights, torch.tensor(1.0))
             
             self.logger.info("Single-label class weights:")
-            class_names = ["NoStutter", "WordRep", "SoundRep", "Prolongation", "Interjection", "Block"]
+            class_names = DYSFLUENT_CLASSES
             for i, (name, weight) in enumerate(zip(class_names, class_weights)):
                 self.logger.info(f"  Class {i} ({name}): {weight:.4f} (samples: {class_counts[i]:.0f})")
             
@@ -175,7 +177,7 @@ class StutteringDetectorTrainer:
             if self.multi_label:
                 labels = batch['labels'].to(self.device)  # [batch_size, num_classes]
             else:
-                labels = batch['labels'].squeeze().to(self.device)  # [batch_size]
+                labels = batch['labels'].to(self.device)  # [batch_size]
             
             # Forward pass
             self.optimizer.zero_grad()
@@ -212,7 +214,7 @@ class StutteringDetectorTrainer:
                 if self.multi_label:
                     labels = batch['labels'].to(self.device)
                 else:
-                    labels = batch['labels'].squeeze().to(self.device)
+                    labels = batch['labels'].to(self.device)
                 
                 outputs = self.model(input_features)
                 loss = self.criterion(outputs['logits'], labels)
@@ -241,10 +243,7 @@ class StutteringDetectorTrainer:
             f1_per_class = f1_score(all_labels, all_predictions, average=None)
             
             # Multi-label classification report
-            class_names = [
-                "NoStutter", "WordRep", "SoundRep", 
-                "Prolongation", "Interjection", "Block"
-            ]
+            class_names = DYSFLUENT_CLASSES
             
             report = {}
             for i, class_name in enumerate(class_names):
@@ -264,10 +263,7 @@ class StutteringDetectorTrainer:
             f1_per_class = f1_score(all_labels, all_predictions, average=None)
             
             # Single-label classification report
-            class_names = [
-                "NoStutter", "WordRep", "SoundRep", 
-                "Prolongation", "Interjection", "Block"
-            ]
+            class_names = DYSFLUENT_CLASSES
             
             report = classification_report(
                 all_labels, all_predictions, 

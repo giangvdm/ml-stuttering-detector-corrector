@@ -26,6 +26,8 @@ from src.components.AudioPreprocessor import AudioPreprocessor
 from src.components.Trainer import StutteringDetectorTrainer, create_data_loaders
 from src.components.Dataset import Sep28kDataset
 
+DYSFLUENT_CLASSES = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
+
 
 def load_csv_data(csv_file: str, multi_label: bool = False) -> Tuple[List[str], List, List[str]]:
     """
@@ -97,7 +99,7 @@ def load_csv_data(csv_file: str, multi_label: bool = False) -> Tuple[List[str], 
     if not multi_label:
         # Log class distribution for single-label
         unique, counts = np.unique(labels, return_counts=True)
-        class_names = ['NoStutter', 'WordRep', 'SoundRep', 'Prolongation', 'Interjection', 'Block']
+        class_names = DYSFLUENT_CLASSES
         for cls, count in zip(unique, counts):
             logging.info(f"Class {cls} ({class_names[cls]}): {count} samples ({count/len(labels)*100:.1f}%)")
     
@@ -114,7 +116,7 @@ def evaluate_model(model: torch.nn.Module, test_loader, device: str) -> Dict:
     with torch.no_grad():
         for batch in test_loader:
             input_features = batch['input_features'].to(device)
-            labels = batch['labels'].squeeze().to(device)
+            labels = batch['labels'].to(device)
             
             outputs = model(input_features)
             probabilities = torch.softmax(outputs['logits'], dim=1)
@@ -130,10 +132,7 @@ def evaluate_model(model: torch.nn.Module, test_loader, device: str) -> Dict:
     f1_weighted = f1_score(all_labels, all_predictions, average='weighted')
     f1_per_class = f1_score(all_labels, all_predictions, average=None)
     
-    class_names = [
-        "No Stutter", "Word Rep", "Sound Rep", 
-        "Prolongation", "Interjection", "Block"
-    ]
+    class_names = DYSFLUENT_CLASSES
     
     report = classification_report(
         all_labels, all_predictions, 

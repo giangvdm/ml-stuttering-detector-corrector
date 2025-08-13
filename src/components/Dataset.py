@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 from collections import Counter
 import logging
 
+DYSFLUENT_CLASSES = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
 
 class Sep28kDataset(Dataset):
     """
@@ -41,14 +42,7 @@ class Sep28kDataset(Dataset):
         assert len(spectrograms) == len(labels) == len(file_ids)
         
         # Class mapping
-        self.class_names = [
-            "No Stuttered Words",
-            "Word Repetition", 
-            "Sound Repetition",
-            "Prolongation",
-            "Interjection",
-            "Block"
-        ]
+        self.class_names = DYSFLUENT_CLASSES
     
     def __len__(self) -> int:
         return len(self.spectrograms)
@@ -73,7 +67,7 @@ class Sep28kDataset(Dataset):
             # Single-label: return class index
             return {
                 'input_features': torch.FloatTensor(spectrogram),
-                'labels': torch.LongTensor([label]),  # Class index for CrossEntropyLoss
+                'labels': torch.LongTensor(label),  # Class index for CrossEntropyLoss
                 'file_id': file_id
             }
         
@@ -184,7 +178,7 @@ class Sep28kDataset(Dataset):
             # Calculate class distribution for multi-label
             train_counts = np.array(train_labels).sum(axis=0)
             val_counts = np.array(val_labels).sum(axis=0)
-            class_names = ["Block", "Prolongation", "SoundRep", "WordRep", "Interjection", "NoStutter"]
+            class_names = DYSFLUENT_CLASSES
             
             for i, name in enumerate(class_names):
                 total = train_counts[i] + val_counts[i]
@@ -195,7 +189,7 @@ class Sep28kDataset(Dataset):
             # Calculate class distribution for single-label
             train_counter = Counter(train_labels)
             val_counter = Counter(val_labels)
-            class_names = ["NoStutter", "WordRep", "SoundRep", "Prolongation", "Interjection", "Block"]
+            class_names = DYSFLUENT_CLASSES
             
             logging.info("Single-label stratified split completed:")
             for cls in range(len(class_names)):
