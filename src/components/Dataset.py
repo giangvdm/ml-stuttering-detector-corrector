@@ -27,13 +27,15 @@ class Sep28kDataset(Dataset):
         labels: List,  # Can be List[int] for single-label or List[List[int]] for multi-label
         file_ids: List[str],
         multi_label: bool = False,
-        augmentation_prob: float = 0.3
+        augmentation_prob: float = 0.4,
+        is_training: bool = False
     ):
         self.spectrograms = spectrograms
         self.labels = labels
         self.file_ids = file_ids
         self.multi_label = multi_label
         self.augmentation_prob = augmentation_prob
+        self.is_training = is_training
         
         assert len(spectrograms) == len(labels) == len(file_ids)
         
@@ -54,6 +56,10 @@ class Sep28kDataset(Dataset):
         spectrogram = self.spectrograms[idx].copy()
         label = self.labels[idx]
         file_id = self.file_ids[idx]
+
+        # Data Augmentation
+        if self.is_training and np.random.random() < self.augmentation_prob:
+            spectrogram = self._apply_augmentation(spectrogram)
         
         if self.multi_label:
             # Multi-label: return binary vector
@@ -69,6 +75,45 @@ class Sep28kDataset(Dataset):
                 'labels': torch.LongTensor([label]),  # Class index for CrossEntropyLoss
                 'file_id': file_id
             }
+        
+    def _apply_augmentation(self, spectrogram: np.ndarray) -> np.ndarray:
+        """Apply multiple augmentation techniques."""
+        aug_spec = spectrogram.copy()
+        
+        # 1. Frequency Masking - simulate spectral interference
+        if np.random.random() < 0.25:
+            freq_mask_param = min(4, aug_spec.shape[0] // 10)  # More conservative
+            if freq_mask_param > 0:
+                f = np.random.randint(1, freq_mask_param + 1)
+                f0 = np.random.randint(0, aug_spec.shape[0] - f)
+                aug_spec[f0:f0+f, :] = aug_spec[f0:f0+f, :].mean()  # Mean instead of zero
+        
+        # 2. Time Masking - simulate brief signal dropouts
+        if np.random.random() < 0.25:
+            time_mask_param = min(8, aug_spec.shape[1] // 15)  # Smaller masks
+            if time_mask_param > 0:
+                t = np.random.randint(1, time_mask_param + 1)
+                t0 = np.random.randint(0, aug_spec.shape[1] - t)
+                aug_spec[:, t0:t0+t] = aug_spec[:, t0:t0+t].mean()  # Mean instead of zero
+        
+        # 3. Background Noise (Sheikh et al. 2023)
+        # "adding different types of background noise and reverberation and babble"
+        if np.random.random() < 0.3:
+            noise_types = ['gaussian', 'white', 'pink']
+            noise_type = np.random.choice(noise_types)
+            
+            if noise_type == 'gaussian':
+                # Low-level Gaussian noise for recording quality variation
+                noise_std = np.random.uniform(0.005, 0.02)  # Very conservative
+                noise = np.random.normal(0, noise_std, aug_spec.shape)
+                aug_spec = aug_spec + noise
+        
+        # 4. Amplitude Scaling
+        if np.random.random() < 0.4:
+            scale_factor = np.random.uniform(0.85, 1.15)
+            aug_spec = aug_spec * scale_factor
+        
+        return aug_spec
         
 @staticmethod
 def stratified_split(
