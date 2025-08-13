@@ -22,7 +22,7 @@ class StutteringClassifier(nn.Module):
         num_classes: int = 6,
         projection_dim: int = 256,
         dropout_rate: float = 0.1,
-        freeze_strategy: str = "base",  # "base", "strategy1", "strategy2"
+        freeze_strategy: str = "base",  # "base", "1", "2"
         multi_label: bool = False  # Multi-label vs single-label classification
     ):
         super().__init__()
@@ -71,8 +71,8 @@ class StutteringClassifier(nn.Module):
         Apply encoder layer freezing strategies as described in the paper.
         
         Args:
-            strategy: "base" (no freezing), "strategy1" (freeze first 3), 
-                     "strategy2" (freeze last 3)
+            strategy: "base" (no freezing), "1" (freeze first 3), 
+                     "2" (freeze last 3)
         """
         if strategy == "base":
             # No freezing - all layers trainable
@@ -119,6 +119,13 @@ class StutteringClassifier(nn.Module):
         """
         # Handle variable input lengths by interpolating to expected size if needed
         batch_size, n_mels, time_steps = input_features.shape
+
+        # Encoder forward pass
+        encoder_outputs = self.encoder(
+            input_features, 
+            return_dict=True,
+            output_hidden_states=True
+        )
         
         # Whisper encoder expects specific input format
         # For 3-second clips, we need to adapt the input to work with Whisper
@@ -143,17 +150,21 @@ class StutteringClassifier(nn.Module):
         
         # Global average pooling across time dimension
         pooled_output = torch.mean(hidden_states, dim=1)  # [batch_size, hidden_dim]
+        # Aggressive Dropout strategy
+        pooled_output = F.dropout(pooled_output, p=0.5, training=self.training)
         
         # Project to lower dimension
         projected = self.projector(pooled_output)  # [batch_size, projection_dim]
-        projected = F.gelu(projected)  # Apply GELU as in the architecture
+        # projected = F.gelu(projected)  # Apply GELU as in the architecture
+        projected = F.dropout(projected, p=0.3, training=self.training) # Aggressive Dropout strategy
         
         # Classification
         logits = self.classifier(projected)  # [batch_size, num_classes]
         
         return {
             'logits': logits,
-            'hidden_states': hidden_states,
+            # 'hidden_states': hidden_states,
+            'hidden_states': pooled_output, # Aggressive Dropout strategy
             'projected_features': projected
         }
     

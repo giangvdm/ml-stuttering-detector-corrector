@@ -28,9 +28,10 @@ class StutteringDetectorTrainer:
         train_loader: DataLoader,
         val_loader: DataLoader,
         device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
-        learning_rate: float = 2.5e-5,
-        num_epochs: int = 50,
-        patience: int = 7,
+        # learning_rate: float = 2.5e-5, # Recommended by Whisper
+        learning_rate: float = 1e-5,
+        num_epochs: int = 30,
+        patience: int = 3,
         save_dir: str = './models',
         log_dir: str = './logs',
         multi_label: bool = False
@@ -53,7 +54,9 @@ class StutteringDetectorTrainer:
         self.optimizer = optim.AdamW(
             model.parameters(),
             lr=learning_rate,
-            weight_decay=0.01
+            weight_decay=0.05, # Higher weight decay
+            eps=1e-8,
+            betas=(0.9, 0.98) # Different beta values for stability
         )
 
         # Setup logging
@@ -73,7 +76,11 @@ class StutteringDetectorTrainer:
             self.criterion = nn.CrossEntropyLoss(weight=weights)
         
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='max', factor=0.5, patience=3
+            self.optimizer,
+            mode='max',
+            factor=0.3,  # Reduce LR more aggressively
+            patience=2,  # Reduce LR faster
+            min_lr=1e-6  # Lower minimum LR
         )
         
         # Training tracking
