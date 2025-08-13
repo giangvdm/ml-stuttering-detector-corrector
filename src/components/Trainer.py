@@ -55,12 +55,22 @@ class StutteringDetectorTrainer:
             lr=learning_rate,
             weight_decay=0.01
         )
+
+        # Setup logging
+        self._setup_logging()
         
-        # Loss function depends on single vs multi-label
+        # Calculate class weights BEFORE creating loss function
+        self.logger.info("Calculating class weights for imbalanced dataset...")
+        weights = self._calculate_class_weights(train_loader, multi_label)
+        weights = weights.to(device)
+        
+        # WEIGHTED Loss function depends on single vs multi-label
         if multi_label:
-            self.criterion = nn.BCEWithLogitsLoss()  # For multi-label binary classification
+            # For multi-label: use pos_weight parameter
+            self.criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
         else:
-            self.criterion = nn.CrossEntropyLoss()  # For single-label multi-class
+            # For single-label: use weight parameter  
+            self.criterion = nn.CrossEntropyLoss(weight=weights)
         
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='max', factor=0.5, patience=3
@@ -72,9 +82,7 @@ class StutteringDetectorTrainer:
         self.val_f1_scores = []
         self.best_f1 = 0.0
         self.early_stop_counter = 0
-        
-        # Setup logging
-        self._setup_logging()
+
     
     def _setup_logging(self):
         """Setup training logger."""
@@ -87,6 +95,63 @@ class StutteringDetectorTrainer:
             ]
         )
         self.logger = logging.getLogger(__name__)
+
+    def _calculate_class_weights(self, train_loader: DataLoader, multi_label: bool = False):
+        """
+        Calculate class weights for handling imbalanced datasets.
+        
+        Args:
+            train_loader: Training data loader
+            multi_label: Whether this is multi-label classification
+            
+        Returns:
+            torch.Tensor: Class weights for loss function
+        """
+        if multi_label:
+            # For multi-label: calculate positive weights for each class
+            class_counts = torch.zeros(6)  # 6 classes
+            total_samples = 0
+            
+            for batch in train_loader:
+                labels = batch['labels']  # Shape: [batch_size, num_classes]
+                class_counts += labels.sum(dim=0)
+                total_samples += labels.shape[0]
+            
+            # Calculate positive class weights: total_samples / (2 * positive_count)
+            pos_weights = total_samples / (2 * class_counts)
+            
+            # Handle edge case where class has no positive samples
+            pos_weights = torch.where(class_counts > 0, pos_weights, torch.tensor(1.0))
+            
+            self.logger.info("Multi-label positive class weights:")
+            class_names = ["NoStutter", "WordRep", "SoundRep", "Prolongation", "Interjection", "Block"]
+            for i, (name, weight) in enumerate(zip(class_names, pos_weights)):
+                self.logger.info(f"  {name}: {weight:.4f} (positive samples: {class_counts[i]:.0f})")
+            
+            return pos_weights
+        
+        else:
+            # For single-label: calculate class weights
+            class_counts = torch.zeros(6)  # 6 classes: 0-5
+            
+            for batch in train_loader:
+                labels = batch['labels'].squeeze()
+                for class_idx in range(6):
+                    class_counts[class_idx] += (labels == class_idx).sum()
+            
+            # Calculate inverse frequency weights
+            total_samples = class_counts.sum()
+            class_weights = total_samples / (6 * class_counts)  # 6 classes
+            
+            # Handle edge case where class has no samples
+            class_weights = torch.where(class_counts > 0, class_weights, torch.tensor(1.0))
+            
+            self.logger.info("Single-label class weights:")
+            class_names = ["NoStutter", "WordRep", "SoundRep", "Prolongation", "Interjection", "Block"]
+            for i, (name, weight) in enumerate(zip(class_names, class_weights)):
+                self.logger.info(f"  Class {i} ({name}): {weight:.4f} (samples: {class_counts[i]:.0f})")
+            
+            return class_weights
     
     def train_epoch(self) -> float:
         """Train for one epoch."""
