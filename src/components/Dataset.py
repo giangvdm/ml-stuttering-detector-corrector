@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from typing import Dict, List, Tuple, Optional
+from sklearn.model_selection import train_test_split
 from collections import Counter
 import logging
 
@@ -155,7 +156,6 @@ class Sep28kDataset(Dataset):
             except ImportError:
                 logging.warning("iterative-stratification not available. Using random split for multi-label.")
                 # Fallback to random split if iterative-stratification is not installed
-                from sklearn.model_selection import train_test_split
                 train_idx, val_idx = train_test_split(
                     range(len(spectrograms)),
                     test_size=test_size,

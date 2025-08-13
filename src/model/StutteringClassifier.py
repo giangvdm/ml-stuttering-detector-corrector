@@ -119,13 +119,6 @@ class StutteringClassifier(nn.Module):
         """
         # Handle variable input lengths by interpolating to expected size if needed
         batch_size, n_mels, time_steps = input_features.shape
-
-        # Encoder forward pass
-        encoder_outputs = self.encoder(
-            input_features, 
-            return_dict=True,
-            output_hidden_states=True
-        )
         
         # Whisper encoder expects specific input format
         # For 3-second clips, we need to adapt the input to work with Whisper
@@ -143,7 +136,11 @@ class StutteringClassifier(nn.Module):
             ).squeeze(1)  # Remove channel dimension
         
         # Get encoder outputs
-        encoder_outputs = self.encoder(input_features)
+        encoder_outputs = self.encoder(
+            input_features, 
+            return_dict=True,
+            output_hidden_states=True
+        )
         
         # Get the last hidden state
         hidden_states = encoder_outputs.last_hidden_state  # [batch_size, seq_len, hidden_dim]
