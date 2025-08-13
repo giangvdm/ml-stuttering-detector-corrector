@@ -65,9 +65,12 @@ class Sep28kDataset(Dataset):
             }
         else:
             # Single-label: return class index
+            if isinstance(label, (list, tuple)):
+                # Convert list to single integer (take first positive class)
+                label = next((i for i, val in enumerate(label) if val == 1), 0)
             return {
                 'input_features': torch.FloatTensor(spectrogram),
-                'labels': torch.LongTensor(label),  # Class index for CrossEntropyLoss
+                'labels': torch.tensor(int(label), dtype=torch.long),  # Class index for CrossEntropyLoss
                 'file_id': file_id
             }
         

@@ -87,7 +87,7 @@ def load_csv_data(csv_file: str, multi_label: bool = False) -> Tuple[List[str], 
                     else:
                         labels.append(5)  # NoStutteredWords → Class 5
                 else:
-                    labels.append(0)  # No Stuttered Words
+                    labels.append(5)  # No Stuttered Words
             
             # Extract filename from full path
             filename = Path(audio_path).name
