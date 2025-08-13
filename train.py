@@ -51,7 +51,7 @@ def load_csv_data(csv_file: str, multi_label: bool = False) -> Tuple[List[str], 
     df = pd.read_csv(csv_file)
     
     # Disfluency columns in order matching the paper
-    disfluency_cols = ['NoStutteredWords', 'WordRep', 'SoundRep', 'Prolongation', 'Interjection', 'Block']
+    disfluency_cols = DYSFLUENT_CLASSES
     
     audio_paths = []
     labels = []
@@ -73,18 +73,19 @@ def load_csv_data(csv_file: str, multi_label: bool = False) -> Tuple[List[str], 
                 
                 if sum(stuttering_labels) > 0:
                     # Has stuttering - find the first stuttering type
-                    if row['WordRep'] == 1:
-                        labels.append(1)  # Word Repetition
-                    elif row['SoundRep'] == 1:
-                        labels.append(2)  # Sound Repetition  
+                    # Change the label assignment logic to match DYSFLUENT_CLASSES order:
+                    if row['Block'] == 1:
+                        labels.append(0)  # Block → Class 0
                     elif row['Prolongation'] == 1:
-                        labels.append(3)  # Prolongation
+                        labels.append(1)  # Prolongation → Class 1
+                    elif row['SoundRep'] == 1:
+                        labels.append(2)  # SoundRep → Class 2
+                    elif row['WordRep'] == 1:
+                        labels.append(3)  # WordRep → Class 3
                     elif row['Interjection'] == 1:
-                        labels.append(4)  # Interjection
-                    elif row['Block'] == 1:
-                        labels.append(5)  # Block
+                        labels.append(4)  # Interjection → Class 4
                     else:
-                        labels.append(0)  # Fallback to no stutter
+                        labels.append(5)  # NoStutteredWords → Class 5
                 else:
                     labels.append(0)  # No Stuttered Words
             

@@ -301,8 +301,7 @@ class StutteringDetectorTrainer:
             self.logger.info(f"Val F1 (weighted): {val_f1:.4f}")
             
             # Per-class F1 scores
-            for i, class_name in enumerate(["No Stutter", "Word Rep", "Sound Rep", 
-                                          "Prolongation", "Interjection", "Block"]):
+            for i, class_name in enumerate(DYSFLUENT_CLASSES):
                 if str(i) in report:
                     f1_class = report[str(i)]['f1-score']
                     self.logger.info(f"{class_name} F1: {f1_class:.3f}")
