@@ -8,7 +8,7 @@ This script demonstrates how to:
 3. Train and evaluate the model
 
 Usage:
-    python main_example.py --csv_file all_labels.csv --strategy 1
+    python train.py --csv_file all_labels.csv --strategy 1
 """
 
 import argparse
@@ -24,6 +24,7 @@ import pandas as pd
 from src.model.StutteringClassifier import StutteringClassifier
 from src.components.AudioPreprocessor import AudioPreprocessor
 from src.components.Trainer import StutteringDetectorTrainer, create_data_loaders
+from src.components.Dataset import Sep28kDataset
 
 
 def load_csv_data(csv_file: str, multi_label: bool = False) -> Tuple[List[str], List, List[str]]:
@@ -197,6 +198,7 @@ def main():
     preprocessor = AudioPreprocessor()
     print("Processing audio files...")
     
+    logging.info("Extracting features...")
     spectrograms = []
     processed_labels = []
     processed_ids = []
@@ -210,14 +212,19 @@ def main():
         except Exception as e:
             print(f"Failed to process {audio_path}: {e}")
     
-    # Split data (using speaker-exclusive splits as in paper would be better)
-    split_idx = int(0.8 * len(spectrograms))
-    train_spectrograms = spectrograms[:split_idx]
-    train_labels = processed_labels[:split_idx]
-    train_ids = processed_ids[:split_idx]
-    val_spectrograms = spectrograms[split_idx:]
-    val_labels = processed_labels[split_idx:]
-    val_ids = processed_ids[split_idx:]
+    # Stratified data split
+    logging.info("Performing stratified train/validation split...")
+    
+    # Use stratified split instead of simple percentage split
+    train_spectrograms, val_spectrograms, train_labels, val_labels, train_ids, val_ids = \
+        Sep28kDataset.stratified_split(
+            spectrograms=spectrograms,
+            labels=processed_labels,
+            file_ids=processed_ids,
+            test_size=0.2,  # 20% for validation
+            multi_label=args.multi_label,
+            random_state=42
+        )
     
     print(f"Training samples: {len(train_spectrograms)}")
     print(f"Validation samples: {len(val_spectrograms)}")
