@@ -199,7 +199,7 @@ class StutteringDetectorTrainer:
         avg_loss = total_loss / num_batches
         return avg_loss
     
-    def validate(self) -> Tuple[float, float, Dict]:
+    def validate(self) -> Tuple[float, float, Dict, Dict]:
         """Validate the model."""
         self.model.eval()
         total_loss = 0.0
@@ -243,10 +243,8 @@ class StutteringDetectorTrainer:
             f1_per_class = f1_score(all_labels, all_predictions, average=None)
             
             # Multi-label classification report
-            class_names = DYSFLUENT_CLASSES
-            
             report = {}
-            for i, class_name in enumerate(class_names):
+            for i, class_name in enumerate(DYSFLUENT_CLASSES):
                 y_true_class = [row[i] for row in all_labels]
                 y_pred_class = [row[i] for row in all_predictions]
                 
@@ -263,16 +261,28 @@ class StutteringDetectorTrainer:
             f1_per_class = f1_score(all_labels, all_predictions, average=None)
             
             # Single-label classification report
-            class_names = DYSFLUENT_CLASSES
-            
             report = classification_report(
                 all_labels, all_predictions, 
-                target_names=class_names, 
+                target_names=DYSFLUENT_CLASSES, 
                 output_dict=True,
                 zero_division=0
             )
+
+        # Calculate per-class accuracy  
+        per_class_acc = self._calculate_per_class_accuracy(all_labels, all_predictions)
         
-        return avg_loss, f1_weighted, report
+        # Add per-class accuracy to the report for consistent output format
+        if self.multi_label:
+            for class_name, accuracy in per_class_acc.items():
+                if class_name in report:
+                    report[class_name]['accuracy'] = accuracy
+        else:
+            for i, class_name in enumerate(DYSFLUENT_CLASSES):
+                if str(i) in report:
+                    report[str(i)]['accuracy'] = per_class_acc[class_name]
+        
+        per_class_acc = self._calculate_per_class_accuracy(all_labels, all_predictions)
+        return avg_loss, f1_weighted, report, per_class_acc
     
     def train(self) -> Dict:
         """Complete training loop."""
@@ -288,7 +298,7 @@ class StutteringDetectorTrainer:
             self.train_losses.append(train_loss)
             
             # Validate
-            val_loss, val_f1, report = self.validate()
+            val_loss, val_f1, report, per_class_acc = self.validate()
             self.val_losses.append(val_loss)
             self.val_f1_scores.append(val_f1)
             
@@ -300,12 +310,18 @@ class StutteringDetectorTrainer:
             self.logger.info(f"Val Loss: {val_loss:.4f}")
             self.logger.info(f"Val F1 (weighted): {val_f1:.4f}")
             
-            # Per-class F1 scores
-            for i, class_name in enumerate(DYSFLUENT_CLASSES):
-                if str(i) in report:
-                    f1_class = report[str(i)]['f1-score']
-                    self.logger.info(f"{class_name} F1: {f1_class:.3f}")
+            # # Per-class F1 scores
+            # for i, class_name in enumerate(DYSFLUENT_CLASSES):
+            #     if str(i) in report:
+            #         f1_class = report[str(i)]['f1-score']
+            #         self.logger.info(f"{class_name} F1: {f1_class:.3f}")
             
+            # Per-class accuracy
+            self.logger.info("Per-class accuracy:")
+            for class_name in DYSFLUENT_CLASSES:
+                accuracy = per_class_acc.get(class_name, 0.0)
+                self.logger.info(f"  {class_name}: {accuracy:.3f}")
+
             # Early stopping and model saving
             if val_f1 > self.best_f1:
                 self.best_f1 = val_f1
@@ -325,6 +341,42 @@ class StutteringDetectorTrainer:
             'val_losses': self.val_losses,
             'val_f1_scores': self.val_f1_scores
         }
+    
+    def _calculate_per_class_accuracy(self, all_labels, all_predictions):
+        """Calculate per-class accuracy."""
+        import numpy as np
+        
+        per_class_acc = {}
+        class_names = DYSFLUENT_CLASSES
+        
+        if self.multi_label:
+            # Multi-label: accuracy for each class
+            all_labels_np = np.array(all_labels)
+            all_predictions_np = np.array(all_predictions)
+            
+            for i, class_name in enumerate(class_names):
+                if all_labels_np.shape[1] > i:
+                    # Binary accuracy for this class
+                    correct = np.sum(all_labels_np[:, i] == all_predictions_np[:, i])
+                    total = len(all_labels_np)
+                    accuracy = correct / total
+                    per_class_acc[class_name] = accuracy
+        else:
+            # Single-label: accuracy for each class
+            all_labels_np = np.array(all_labels)
+            all_predictions_np = np.array(all_predictions)
+            
+            for i, class_name in enumerate(class_names):
+                # Find samples that belong to this class
+                class_mask = all_labels_np == i
+                if np.sum(class_mask) > 0:
+                    class_preds = all_predictions_np[class_mask]
+                    class_accuracy = np.sum(class_preds == i) / len(class_preds)
+                    per_class_acc[class_name] = class_accuracy
+                else:
+                    per_class_acc[class_name] = 0.0
+                    
+        return per_class_acc
     
     def _save_model(self, epoch: int, f1_score: float, report: Dict):
         """Save model checkpoint."""
