@@ -199,7 +199,7 @@ class StutteringDetectorTrainer:
         avg_loss = total_loss / num_batches
         return avg_loss
     
-    def validate(self) -> Tuple[float, float, Dict, Dict]:
+    def validate(self) -> Tuple[float, float, Dict, Dict, any]:
         """Validate the model."""
         self.model.eval()
         total_loss = 0.0
@@ -282,7 +282,9 @@ class StutteringDetectorTrainer:
                     report[str(i)]['accuracy'] = per_class_acc[class_name]
         
         per_class_acc = self._calculate_per_class_accuracy(all_labels, all_predictions)
-        return avg_loss, f1_weighted, report, per_class_acc
+        cm_data = self._calculate_confusion_matrix(all_labels, all_predictions)
+
+        return avg_loss, f1_weighted, report, per_class_acc, cm_data
     
     def train(self) -> Dict:
         """Complete training loop."""
@@ -298,7 +300,7 @@ class StutteringDetectorTrainer:
             self.train_losses.append(train_loss)
             
             # Validate
-            val_loss, val_f1, report, per_class_acc = self.validate()
+            val_loss, val_f1, report, per_class_acc, cm_data = self.validate()
             self.val_losses.append(val_loss)
             self.val_f1_scores.append(val_f1)
             
@@ -321,6 +323,9 @@ class StutteringDetectorTrainer:
             for class_name in DYSFLUENT_CLASSES:
                 accuracy = per_class_acc.get(class_name, 0.0)
                 self.logger.info(f"  {class_name}: {accuracy:.3f}")
+
+            # Confusion matrix
+            self._log_confusion_matrix(cm_data)
 
             # Early stopping and model saving
             if val_f1 > self.best_f1:
@@ -377,6 +382,46 @@ class StutteringDetectorTrainer:
                     per_class_acc[class_name] = 0.0
                     
         return per_class_acc
+    
+    def _calculate_confusion_matrix(self, all_labels, all_predictions):
+        """Calculate and format confusion matrix."""
+        from sklearn.metrics import confusion_matrix
+        import numpy as np
+        
+        if self.multi_label:
+            # For multi-label, show confusion matrix for each class
+            cm_dict = {}
+            all_labels_np = np.array(all_labels)
+            all_predictions_np = np.array(all_predictions)
+            
+            for i, class_name in enumerate(DYSFLUENT_CLASSES):
+                if all_labels_np.shape[1] > i:
+                    cm = confusion_matrix(all_labels_np[:, i], all_predictions_np[:, i])
+                    cm_dict[class_name] = cm
+            return cm_dict
+        else:
+            # For single-label, show overall confusion matrix
+            cm = confusion_matrix(all_labels, all_predictions)
+            return cm
+        
+    def _log_confusion_matrix(self, cm_data):
+        """Log confusion matrix to console."""
+        if self.multi_label:
+            # Multi-label: show binary confusion matrix for each class
+            self.logger.info("Confusion matrices (per class):")
+            for class_name, cm in cm_data.items():
+                if cm.size > 0:
+                    self.logger.info(f"  {class_name}:")
+                    self.logger.info(f"    [[TN={cm[0,0]}, FP={cm[0,1]}],")
+                    self.logger.info(f"     [FN={cm[1,0]}, TP={cm[1,1]}]]")
+        else:
+            # Single-label: show full confusion matrix
+            self.logger.info("Confusion Matrix:")
+            self.logger.info("    " + "  ".join([f"{cls[:4]:>4}" for cls in DYSFLUENT_CLASSES]))
+            for i, row in enumerate(cm_data):
+                class_name = DYSFLUENT_CLASSES[i][:4]  # Truncate for display
+                row_str = "  ".join([f"{val:>4}" for val in row])
+                self.logger.info(f"{class_name:>4} {row_str}")
     
     def _save_model(self, epoch: int, f1_score: float, report: Dict):
         """Save model checkpoint."""
