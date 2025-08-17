@@ -38,20 +38,37 @@ def load_csv_data(csv_file: str) -> Tuple[List[str], List[List[int]], List[str]]
     Returns:
         Tuple of (audio_paths, labels, file_ids) where labels are List[List[int]]
     """
+    if not Path(csv_file).exists():
+        raise FileNotFoundError(f"CSV file not found: {csv_file}")
+
     df = pd.read_csv(csv_file)
     
-    # Extract paths and IDs
-    audio_paths = df['audio_path'].tolist()
-    file_ids = df['file_id'].tolist()
-    
     # Extract binary labels for each disfluency type
-    label_columns = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
+    audio_paths = []
     labels = []
+    file_ids = []
     
     for _, row in df.iterrows():
-        # Create binary label vector for multi-label classification
-        label_vector = [int(row[col]) for col in label_columns]
-        labels.append(label_vector)
+        audio_path = row['filepath']
+        if Path(audio_path).exists():
+            audio_paths.append(audio_path)
+
+            # Create binary label vector for multi-label classification
+            label_vector = [int(row[col]) for col in DYSFLUENT_CLASSES]
+            labels.append(label_vector)
+
+            # Create file ID from filename
+            file_id = Path(audio_path).stem
+            file_ids.append(file_id)
+        else:
+            print(f"Warning: Audio file not found: {audio_path}")
+
+    print(f"Loaded {len(audio_paths)} valid audio files")
+
+    labels_array = np.array(labels)
+    for i, class_name in enumerate(DYSFLUENT_CLASSES):
+        positive_count = np.sum(labels_array[:, i])
+        print(f"  {class_name}: {positive_count} positive samples")
     
     return audio_paths, labels, file_ids
 
@@ -152,7 +169,7 @@ def main():
         raise ValueError("--csv_file required")
     
     print(f"Loading SEP-28k data from {args.csv_file}...")
-    audio_paths, labels, file_ids = load_csv_data(args.csv_file, multi_label=True)
+    audio_paths, labels, file_ids = load_csv_data(args.csv_file)
     
     # Process audio files
     preprocessor = AudioPreprocessor()
@@ -182,7 +199,6 @@ def main():
             labels=processed_labels,
             file_ids=processed_ids,
             test_size=0.2,  # 20% for validation
-            multi_label=args.multi_label,
             random_state=42
         )
     

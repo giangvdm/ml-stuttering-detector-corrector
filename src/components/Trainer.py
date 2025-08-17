@@ -275,32 +275,17 @@ class StutteringDetectorTrainer:
         per_class_acc = {}
         class_names = DYSFLUENT_CLASSES
         
-        if self.multi_label:
-            # Multi-label: accuracy for each class
-            all_labels_np = np.array(all_labels)
-            all_predictions_np = np.array(all_predictions)
-            
-            for i, class_name in enumerate(class_names):
-                if all_labels_np.shape[1] > i:
-                    # Binary accuracy for this class
-                    correct = np.sum(all_labels_np[:, i] == all_predictions_np[:, i])
-                    total = len(all_labels_np)
-                    accuracy = correct / total
-                    per_class_acc[class_name] = accuracy
-        else:
-            # Single-label: accuracy for each class
-            all_labels_np = np.array(all_labels)
-            all_predictions_np = np.array(all_predictions)
-            
-            for i, class_name in enumerate(class_names):
-                # Find samples that belong to this class
-                class_mask = all_labels_np == i
-                if np.sum(class_mask) > 0:
-                    class_preds = all_predictions_np[class_mask]
-                    class_accuracy = np.sum(class_preds == i) / len(class_preds)
-                    per_class_acc[class_name] = class_accuracy
-                else:
-                    per_class_acc[class_name] = 0.0
+        # Multi-label: accuracy for each class
+        all_labels_np = np.array(all_labels)
+        all_predictions_np = np.array(all_predictions)
+        
+        for i, class_name in enumerate(class_names):
+            if all_labels_np.shape[1] > i:
+                # Binary accuracy for this class
+                correct = np.sum(all_labels_np[:, i] == all_predictions_np[:, i])
+                total = len(all_labels_np)
+                accuracy = correct / total
+                per_class_acc[class_name] = accuracy
                     
         return per_class_acc
     
@@ -309,40 +294,26 @@ class StutteringDetectorTrainer:
         from sklearn.metrics import confusion_matrix
         import numpy as np
         
-        if self.multi_label:
-            # For multi-label, show confusion matrix for each class
-            cm_dict = {}
-            all_labels_np = np.array(all_labels)
-            all_predictions_np = np.array(all_predictions)
-            
-            for i, class_name in enumerate(DYSFLUENT_CLASSES):
-                if all_labels_np.shape[1] > i:
-                    cm = confusion_matrix(all_labels_np[:, i], all_predictions_np[:, i])
-                    cm_dict[class_name] = cm
-            return cm_dict
-        else:
-            # For single-label, show overall confusion matrix
-            cm = confusion_matrix(all_labels, all_predictions)
-            return cm
+        # For multi-label, show confusion matrix for each class
+        cm_dict = {}
+        all_labels_np = np.array(all_labels)
+        all_predictions_np = np.array(all_predictions)
+        
+        for i, class_name in enumerate(DYSFLUENT_CLASSES):
+            if all_labels_np.shape[1] > i:
+                cm = confusion_matrix(all_labels_np[:, i], all_predictions_np[:, i])
+                cm_dict[class_name] = cm
+        return cm_dict
         
     def _log_confusion_matrix(self, cm_data):
         """Log confusion matrix to console."""
-        if self.multi_label:
-            # Multi-label: show binary confusion matrix for each class
-            self.logger.info("Confusion matrices (per class):")
-            for class_name, cm in cm_data.items():
-                if cm.size > 0:
-                    self.logger.info(f"  {class_name}:")
-                    self.logger.info(f"    [[TN={cm[0,0]}, FP={cm[0,1]}],")
-                    self.logger.info(f"     [FN={cm[1,0]}, TP={cm[1,1]}]]")
-        else:
-            # Single-label: show full confusion matrix
-            self.logger.info("Confusion Matrix:")
-            self.logger.info("    " + "  ".join([f"{cls[:4]:>4}" for cls in DYSFLUENT_CLASSES]))
-            for i, row in enumerate(cm_data):
-                class_name = DYSFLUENT_CLASSES[i][:4]  # Truncate for display
-                row_str = "  ".join([f"{val:>4}" for val in row])
-                self.logger.info(f"{class_name:>4} {row_str}")
+        # Multi-label: show binary confusion matrix for each class
+        self.logger.info("Confusion matrices (per class):")
+        for class_name, cm in cm_data.items():
+            if cm.size > 0:
+                self.logger.info(f"  {class_name}:")
+                self.logger.info(f"    [[TN={cm[0,0]}, FP={cm[0,1]}],")
+                self.logger.info(f"     [FN={cm[1,0]}, TP={cm[1,1]}]]")
     
     def _save_model(self, epoch: int, f1_score: float, report: Dict):
         """Save model checkpoint."""
