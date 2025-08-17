@@ -1,23 +1,23 @@
 """
-Test script for the improved dysfluency detection model architecture.
+Test script for the dysfluency detection model architecture.
 Verifies that the complete pipeline works correctly.
 """
 
 import torch
 import numpy as np
 from src.model.StutteringClassifier import (
-    create_improved_model, 
+    create_model, 
     StutteringClassifier,
-    ImprovedTrainingConfig
+    TrainingConfig
 )
 
 
 def test_model_creation():
     """Test model creation and architecture verification."""
-    print("Testing improved model creation...")
+    print("Testing model creation...")
     
     # Test with default whisper-base
-    model = create_improved_model()
+    model = create_model()
     
     # Verify architecture components
     assert hasattr(model, 'encoder'), "Model should have encoder"
@@ -38,10 +38,10 @@ def test_forward_pass():
     """Test forward pass with different input sizes."""
     print("\nTesting forward pass...")
     
-    model = create_improved_model()
+    model = create_model()
     model.eval()
     
-    # Test with 3-second clips (as per improved architecture)
+    # Test with 3-second clips (as per architecture)
     batch_size = 4
     n_mels = 80
     time_steps = 3000  # 3 seconds at 1000 frames/sec (Whisper standard)
@@ -80,7 +80,7 @@ def test_temporal_mean_pooling():
     """Test that temporal mean pooling works correctly."""
     print("\nTesting temporal mean pooling...")
     
-    model = create_improved_model()
+    model = create_model()
     model.eval()
     
     # Test with standard 3-second clips (3000 time steps as required by Whisper)
@@ -123,7 +123,7 @@ def test_loss_computation():
     """Test loss computation for multi-label classification."""
     print("\nTesting loss computation...")
     
-    model = create_improved_model()
+    model = create_model()
     
     # Create dummy batch
     batch_size = 8
@@ -168,8 +168,8 @@ def test_training_config():
     """Test training configuration."""
     print("\nTesting training configuration...")
     
-    config = ImprovedTrainingConfig()
-    model = create_improved_model()
+    config = TrainingConfig()
+    model = create_model()
     
     # Test optimizer creation
     optimizer = config.get_optimizer(model)
@@ -198,7 +198,7 @@ def test_save_load_lora():
     print("\nTesting LoRA save/load...")
     
     # Create one model instance
-    model = create_improved_model()
+    model = create_model()
     model.eval()  # Set to eval mode to avoid dropout randomness
     
     # Create test input
@@ -274,7 +274,7 @@ def test_memory_efficiency():
     """Test memory efficiency compared to full fine-tuning."""
     print("\nTesting memory efficiency...")
     
-    model = create_improved_model()
+    model = create_model()
     
     # Simulate training step
     dummy_input = torch.randn(32, 80, 3000)  # Full batch
@@ -302,8 +302,8 @@ def test_memory_efficiency():
 
 
 def main():
-    """Run all improved model architecture tests."""
-    print("Improved Dysfluency Detection Model Tests")
+    """Run all model architecture tests."""
+    print("Dysfluency Detection Model Tests")
     print("=" * 60)
     
     try:
@@ -316,7 +316,7 @@ def main():
         test_memory_efficiency()
         
         print("\n" + "=" * 60)
-        print("🎉 All improved architecture tests passed!")
+        print("All architecture tests passed!")
         print("\nKey Architecture Features Verified:")
         print("✓ Frozen Whisper Encoder + LoRA Adaptation")
         print("✓ Temporal Mean Pooling (T × D_hidden → D_hidden)")

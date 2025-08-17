@@ -7,7 +7,7 @@ from src.components.WhisperLoRAEncoder import LoRAWhisperEncoder, apply_lora_to_
 
 class StutteringClassifier(nn.Module):
     """
-    Improved Dysfluency Detection Architecture following the specification:
+    Dysfluency Detection Architecture following the specification:
     
     Frozen Whisper Encoder + LoRA-Adapted Classification Head
     - Raw Audio Input: 3-second clips  
@@ -75,7 +75,7 @@ class StutteringClassifier(nn.Module):
     
     def forward(self, input_features: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
-        Forward pass through the improved architecture.
+        Forward pass through the architecture.
         
         Args:
             input_features: Log-mel spectrogram features [batch_size, n_mels, time_steps]
@@ -168,7 +168,7 @@ class StutteringClassifier(nn.Module):
                 print(f"Warning: Unexpected keys in classification head: {unexpected_keys}")
 
 
-def create_improved_model(
+def create_model(
     model_name: str = "openai/whisper-base",
     num_classes: int = 6,
     lora_rank: int = 16,
@@ -177,7 +177,7 @@ def create_improved_model(
     num_lora_layers: int = 4
 ) -> StutteringClassifier:
     """
-    Factory function to create the improved dysfluency detection model.
+    Factory function to create the dysfluency detection model.
     
     Args:
         model_name: Whisper model to use ('openai/whisper-base' or 'openai/whisper-small')
@@ -188,7 +188,7 @@ def create_improved_model(
         num_lora_layers: Number of layers from end to apply LoRA (4-6 as per spec)
         
     Returns:
-        Configured improved dysfluency classifier
+        Configured dysfluency classifier
     """
     model = StutteringClassifier(
         model_name=model_name,
@@ -199,9 +199,9 @@ def create_improved_model(
         num_lora_layers=num_lora_layers
     )
     
-    print("🎯 Improved Dysfluency Detection Model Created!")
+    print("Dysfluency Detection Model Created!")
     print("=" * 50)
-    print(f"📋 Architecture Summary:")
+    print(f"Architecture Summary:")
     print(f"   Encoder: {model_name} (FROZEN)")
     print(f"   LoRA Rank: {lora_rank}, Alpha: {lora_alpha}")
     print(f"   Hidden Dim: {model.hidden_dim}")
@@ -210,7 +210,7 @@ def create_improved_model(
     
     # Print parameter efficiency
     param_stats = model.get_trainable_parameters()
-    print(f"📊 Parameter Efficiency:")
+    print(f"Parameter Efficiency:")
     print(f"   Total: {param_stats['total_params']:,}")
     print(f"   Trainable: {param_stats['trainable_params']:,}")
     print(f"   Percentage: {param_stats['trainable_percentage']:.2f}%")
@@ -219,8 +219,8 @@ def create_improved_model(
     return model
 
 
-class ImprovedTrainingConfig:
-    """Training configuration matching the improved architecture specifications."""
+class TrainingConfig:
+    """Training configuration matching the architecture specifications."""
     
     def __init__(
         self,
@@ -243,7 +243,7 @@ class ImprovedTrainingConfig:
         self.augmentation_prob = augmentation_prob
     
     def get_optimizer(self, model: StutteringClassifier) -> torch.optim.Optimizer:
-        """Get optimizer configured for the improved architecture."""
+        """Get optimizer configured for the architecture."""
         # Only optimize trainable parameters (LoRA + classification head)
         trainable_params = [p for p in model.parameters() if p.requires_grad]
         
@@ -286,7 +286,7 @@ class ImprovedTrainingConfig:
         return scheduler
     
     def __str__(self) -> str:
-        return f"""ImprovedTrainingConfig:
+        return f"""TrainingConfig:
     Learning Rate: {self.learning_rate}
     Batch Size: {self.batch_size}
     Max Epochs: {self.max_epochs}

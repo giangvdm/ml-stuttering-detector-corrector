@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class DisfluencyClassificationHead(nn.Module):
     """
-    Enhanced classification head with additional regularization techniques.
+    Classification head with additional regularization techniques.
     """
     
     def __init__(

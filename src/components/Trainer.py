@@ -17,7 +17,7 @@ class StutteringDetectorTrainer:
     """
     Training pipeline for Whisper-based stuttering classification.
     
-    Implements the training configuration from 'Whisper in Focus' paper:
+    Default training configurations:
     - Batch size: 32
     - Learning rate: 1e-4 
     - Cross-entropy loss
@@ -326,7 +326,6 @@ class StutteringDetectorTrainer:
             'optimizer_state_dict': self.optimizer.state_dict(),
             'f1_score': f1_score,
             'classification_report': report,
-            'freeze_strategy': getattr(self.model, 'freeze_strategy', None),
             'num_classes': self.model.num_classes
         }
         

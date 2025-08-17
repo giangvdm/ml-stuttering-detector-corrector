@@ -10,7 +10,7 @@ class LoRAWhisperEncoder(nn.Module):
     Whisper encoder with LoRA adaptation applied to specified layers.
     
     This module freezes the entire Whisper encoder and only applies LoRA
-    adaptation to the last 4-6 layers as specified in the improved architecture.
+    adaptation to the last 4-6 layers as specified in the architecture.
     """
     
     def __init__(
@@ -31,7 +31,7 @@ class LoRAWhisperEncoder(nn.Module):
         
         # Set up LoRA configuration
         if lora_config is None:
-            # Default configuration matching the improved architecture
+            # Default configuration
             target_layers = get_lora_target_layers(model_name, num_layers_from_end=4)
             lora_config = LoRAConfig(
                 rank=16,

@@ -9,7 +9,7 @@ from scipy.interpolate import interp1d
 
 class AudioAugmentation:
     """
-    Audio augmentation pipeline following the improved architecture specifications.
+    Audio augmentation pipeline.
     
     Implements:
     - Tempo/Speed Perturbation
@@ -310,7 +310,7 @@ def create_augmentation_pipeline(
     individual_aug_prob: float = 0.5
 ) -> AudioAugmentation:
     """
-    Factory function to create the enhanced augmentation pipeline.
+    Factory function to create the augmentation pipeline.
     
     Args:
         sample_rate: Audio sample rate

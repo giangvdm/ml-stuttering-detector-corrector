@@ -8,7 +8,7 @@ This script demonstrates how to:
 3. Train and evaluate the model
 
 Usage:
-    python train.py --csv_file all_labels.csv --strategy 1
+    python train.py --csv_file all_labels.csv --epochs 20
 """
 
 import argparse
@@ -22,7 +22,7 @@ import pandas as pd
 from sklearn.metrics import precision_score, recall_score
 
 # Import our modules
-from src.model.StutteringClassifier import create_improved_model
+from src.model.StutteringClassifier import create_model
 from src.components.AudioPreprocessor import AudioPreprocessor
 from src.components.Trainer import StutteringDetectorTrainer, create_data_loaders
 from src.components.Dataset import Sep28kDataset
@@ -106,8 +106,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train Whisper-based stuttering classifier')
     parser.add_argument('--csv_file', type=str, required=True,
                        help='Path to CSV file with labeled data')
-    parser.add_argument('--strategy', type=str, default='base', choices=['base', '1', '2'],
-                       help='Freezing strategy: base (no freezing), 1 (freeze first 3), 2 (freeze last 3)')
     parser.add_argument('--batch_size', type=int, default=32,
                        help='Batch size for training')
     parser.add_argument('--lr', type=float, default=1e-4,
@@ -182,10 +180,10 @@ def main():
     print(f"Validation samples: {len(val_spectrograms)}")
     
     # Train model
-    print(f"\nTraining with strategy: {args.strategy}")
+    print(f"\nCommencing Training......")
     print("Multi-label classification")
     
-    model = create_improved_model(
+    model = create_model(
         model_name="openai/whisper-base",
         num_classes=6
     )
@@ -213,7 +211,6 @@ def main():
     # Save results   
     with open(f"{args.output_dir}/training_results.json", 'w') as f:
         json.dump({
-            'strategy': args.strategy,
             'best_f1': float(training_results['best_f1']),
             'final_f1': float(eval_results['f1_weighted']),
             'trainable_params': model.get_trainable_parameters()['trainable_params'],
