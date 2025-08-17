@@ -19,7 +19,7 @@ class StutteringDetectorTrainer:
     
     Implements the training configuration from 'Whisper in Focus' paper:
     - Batch size: 32
-    - Learning rate: 1e-4 (PEFT strategy) (2.5e-5 as Whisper originally recommends)
+    - Learning rate: 1e-4 
     - Cross-entropy loss
     - Early stopping
     """
@@ -49,9 +49,10 @@ class StutteringDetectorTrainer:
         self.save_dir = save_dir
         self.log_dir = log_dir
         
-        # Initialize optimizer
+        # Initialize optimizer - only for trainable parameters
+        trainable_params = [p for p in model.parameters() if p.requires_grad]
         self.optimizer = optim.AdamW(
-            model.parameters(),
+            trainable_params,
             lr=learning_rate,
             weight_decay=0.05,
             eps=1e-8,
@@ -207,11 +208,56 @@ class StutteringDetectorTrainer:
 
         return avg_loss, f1_weighted, report, per_class_acc, cm_data
     
+    def _calculate_per_class_accuracy(self, all_labels, all_predictions):
+        """Calculate per-class accuracy."""
+        per_class_acc = {}
+        
+        for i, class_name in enumerate(DYSFLUENT_CLASSES):
+            y_true = np.array([row[i] for row in all_labels])
+            y_pred = np.array([row[i] for row in all_predictions])
+            
+            if len(y_true) > 0:
+                accuracy = np.mean(y_true == y_pred)
+                per_class_acc[class_name] = accuracy
+            else:
+                per_class_acc[class_name] = 0.0
+        
+        return per_class_acc
+    
+    def _calculate_confusion_matrix(self, all_labels, all_predictions):
+        """Calculate confusion matrix for each class."""
+        cm_data = {}
+        
+        for i, class_name in enumerate(DYSFLUENT_CLASSES):
+            y_true = np.array([row[i] for row in all_labels])
+            y_pred = np.array([row[i] for row in all_predictions])
+            
+            if len(y_true) > 0 and len(np.unique(y_true)) > 1:
+                cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+                cm_data[class_name] = cm
+            else:
+                cm_data[class_name] = np.array([])
+        
+        return cm_data
+    
     def train(self) -> Dict:
         """Complete training loop."""
         self.logger.info("Starting training...")
-        self.logger.info(f"Model has {self.model.get_trainable_parameters():,} trainable parameters")
-        self.logger.info(f"Model has {self.model.get_frozen_parameters():,} frozen parameters")
+        
+        # Handle different model types
+        if hasattr(self.model, 'get_trainable_parameters'):
+            param_info = self.model.get_trainable_parameters()
+            if isinstance(param_info, dict):
+                trainable_params = param_info.get('trainable_params', 0)
+                total_params = param_info.get('total_params', 0)
+                frozen_params = total_params - trainable_params
+                self.logger.info(f"Model has {trainable_params:,} trainable parameters")
+                self.logger.info(f"Model has {frozen_params:,} frozen parameters")
+            else:
+                # Legacy format - integer
+                self.logger.info(f"Model has {param_info:,} trainable parameters")
+                if hasattr(self.model, 'get_frozen_parameters'):
+                    self.logger.info(f"Model has {self.model.get_frozen_parameters():,} frozen parameters")
         
         for epoch in range(self.num_epochs):
             self.logger.info(f"\nEpoch {epoch + 1}/{self.num_epochs}")
@@ -232,12 +278,6 @@ class StutteringDetectorTrainer:
             self.logger.info(f"Train Loss: {train_loss:.4f}")
             self.logger.info(f"Val Loss: {val_loss:.4f}")
             self.logger.info(f"Val F1 (weighted): {val_f1:.4f}")
-            
-            # # Per-class F1 scores
-            # for i, class_name in enumerate(DYSFLUENT_CLASSES):
-            #     if str(i) in report:
-            #         f1_class = report[str(i)]['f1-score']
-            #         self.logger.info(f"{class_name} F1: {f1_class:.3f}")
             
             # Per-class accuracy
             self.logger.info("Per-class accuracy:")
@@ -268,45 +308,8 @@ class StutteringDetectorTrainer:
             'val_f1_scores': self.val_f1_scores
         }
     
-    def _calculate_per_class_accuracy(self, all_labels, all_predictions):
-        """Calculate per-class accuracy."""
-        import numpy as np
-        
-        per_class_acc = {}
-        class_names = DYSFLUENT_CLASSES
-        
-        # Multi-label: accuracy for each class
-        all_labels_np = np.array(all_labels)
-        all_predictions_np = np.array(all_predictions)
-        
-        for i, class_name in enumerate(class_names):
-            if all_labels_np.shape[1] > i:
-                # Binary accuracy for this class
-                correct = np.sum(all_labels_np[:, i] == all_predictions_np[:, i])
-                total = len(all_labels_np)
-                accuracy = correct / total
-                per_class_acc[class_name] = accuracy
-                    
-        return per_class_acc
-    
-    def _calculate_confusion_matrix(self, all_labels, all_predictions):
-        """Calculate and format confusion matrix."""
-        from sklearn.metrics import confusion_matrix
-        import numpy as np
-        
-        # For multi-label, show confusion matrix for each class
-        cm_dict = {}
-        all_labels_np = np.array(all_labels)
-        all_predictions_np = np.array(all_predictions)
-        
-        for i, class_name in enumerate(DYSFLUENT_CLASSES):
-            if all_labels_np.shape[1] > i:
-                cm = confusion_matrix(all_labels_np[:, i], all_predictions_np[:, i])
-                cm_dict[class_name] = cm
-        return cm_dict
-        
     def _log_confusion_matrix(self, cm_data):
-        """Log confusion matrix to console."""
+        """Log confusion matrix data."""
         # Multi-label: show binary confusion matrix for each class
         self.logger.info("Confusion matrices (per class):")
         for class_name, cm in cm_data.items():
@@ -323,7 +326,7 @@ class StutteringDetectorTrainer:
             'optimizer_state_dict': self.optimizer.state_dict(),
             'f1_score': f1_score,
             'classification_report': report,
-            'freeze_strategy': self.model.freeze_strategy,
+            'freeze_strategy': getattr(self.model, 'freeze_strategy', None),
             'num_classes': self.model.num_classes
         }
         

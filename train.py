@@ -22,7 +22,7 @@ import pandas as pd
 from sklearn.metrics import precision_score, recall_score
 
 # Import our modules
-from src.model.StutteringClassifier import StutteringClassifier
+from src.model.StutteringClassifier import create_improved_model
 from src.components.AudioPreprocessor import AudioPreprocessor
 from src.components.Trainer import StutteringDetectorTrainer, create_data_loaders
 from src.components.Dataset import Sep28kDataset
@@ -78,7 +78,6 @@ def evaluate_model(model, test_loader, device):
     model.eval()
     all_predictions = []
     all_labels = []
-    all_probabilities = []
     
     with torch.no_grad():
         for batch in test_loader:
@@ -86,72 +85,49 @@ def evaluate_model(model, test_loader, device):
             labels = batch['labels'].to(device)
             
             outputs = model(input_features)
-            
-            # Multi-label: use sigmoid for probabilities
-            probabilities = torch.sigmoid(outputs['logits'])
-            predictions = probabilities > 0.5  # Threshold at 0.5
+            predictions = torch.sigmoid(outputs['logits']) > 0.5
             
             all_predictions.extend(predictions.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
-            all_probabilities.extend(probabilities.cpu().numpy())
     
     # Calculate metrics
-    from sklearn.metrics import f1_score, classification_report, confusion_matrix
-    
-    f1_weighted = f1_score(all_labels, all_predictions, average='weighted')
-    f1_per_class = f1_score(all_labels, all_predictions, average=None)
-    
-    class_names = DYSFLUENT_CLASSES
-    
-    # Multi-label classification report
-    report = {}
-    for i, class_name in enumerate(class_names):
-        y_true_class = [row[i] for row in all_labels]
-        y_pred_class = [row[i] for row in all_predictions]
-        
-        report[class_name] = {
-            'precision': precision_score(y_true_class, y_pred_class, zero_division=0),
-            'recall': recall_score(y_true_class, y_pred_class, zero_division=0),
-            'f1-score': f1_score(y_true_class, y_pred_class, zero_division=0),
-            'support': sum(y_true_class)
-        }
-    
-    # Multi-label confusion matrix (per-class binary matrices)
-    cm = {}
-    for i, class_name in enumerate(class_names):
-        y_true_class = [row[i] for row in all_labels]
-        y_pred_class = [row[i] for row in all_predictions]
-        cm[class_name] = confusion_matrix(y_true_class, y_pred_class).tolist()
+    precision = precision_score(all_labels, all_predictions, average='weighted', zero_division=0)
+    recall = recall_score(all_labels, all_predictions, average='weighted', zero_division=0)
+    f1_weighted = 2 * (precision * recall) / (precision + recall + 1e-8)
     
     return {
-        'f1_weighted': f1_weighted,
-        'f1_per_class': f1_per_class,
-        'classification_report': report,
-        'confusion_matrix': cm,
-        'predictions': all_predictions,
-        'labels': all_labels,
-        'probabilities': all_probabilities
+        'precision_weighted': precision,
+        'recall_weighted': recall,
+        'f1_weighted': f1_weighted
     }
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Whisper Multi-Label Stuttering Classification')
-    parser.add_argument('--csv_file', type=str, help='Path to CSV file with binary labels')
-    parser.add_argument('--strategy', type=str, default='base', 
-                       choices=['base', '1', '2'],
-                       help='Freezing strategy')
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
-    parser.add_argument('--epochs', type=int, default=10, help='Number of epochs')
-    parser.add_argument('--lr', type=float, default=2.5e-5, help='Learning rate')
+def parse_args():
+    parser = argparse.ArgumentParser(description='Train Whisper-based stuttering classifier')
+    parser.add_argument('--csv_file', type=str, required=True,
+                       help='Path to CSV file with labeled data')
+    parser.add_argument('--strategy', type=str, default='base', choices=['base', '1', '2'],
+                       help='Freezing strategy: base (no freezing), 1 (freeze first 3), 2 (freeze last 3)')
+    parser.add_argument('--batch_size', type=int, default=32,
+                       help='Batch size for training')
+    parser.add_argument('--lr', type=float, default=1e-4,
+                       help='Learning rate')
+    parser.add_argument('--epochs', type=int, default=30,
+                       help='Number of training epochs')
     parser.add_argument('--output_dir', type=str, default='./results',
-                       help='Output directory for results')
+                       help='Output directory for models and logs')
     
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
     
-    # Setup
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Device setup
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
     
+    # Create output directory
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     
     # Setup logging
@@ -205,12 +181,12 @@ def main():
     print(f"Training samples: {len(train_spectrograms)}")
     print(f"Validation samples: {len(val_spectrograms)}")
     
-    # Train single model
+    # Train model
     print(f"\nTraining with strategy: {args.strategy}")
     print("Multi-label classification")
     
-    model = StutteringClassifier(
-        freeze_strategy=args.strategy,
+    model = create_improved_model(
+        model_name="openai/whisper-base",
         num_classes=6
     )
     
@@ -240,8 +216,8 @@ def main():
             'strategy': args.strategy,
             'best_f1': float(training_results['best_f1']),
             'final_f1': float(eval_results['f1_weighted']),
-            'trainable_params': model.get_trainable_parameters(),
-            'frozen_params': model.get_frozen_parameters()
+            'trainable_params': model.get_trainable_parameters()['trainable_params'],
+            'frozen_params': model.get_trainable_parameters()['total_params'] - model.get_trainable_parameters()['trainable_params']
         }, f, indent=2)
     
     print(f"\nTraining completed!")

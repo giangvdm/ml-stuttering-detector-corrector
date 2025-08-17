@@ -5,12 +5,13 @@ from typing import Dict, List, Tuple, Optional
 from sklearn.model_selection import train_test_split
 from collections import Counter
 import logging
+from src.components.DataAugmentation import AudioAugmentation
 
 DYSFLUENT_CLASSES = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
 
 class Sep28kDataset(Dataset):
     """
-    Dataset class for multi-label stuttering classification only.
+    Dataset class for multi-label stuttering classification with enhanced augmentation.
     
     Multi-label format: Binary vector for each disfluency type
     [Block, Prolongation, SoundRep, WordRep, Interjection, NoStutteredWords]
@@ -21,14 +22,17 @@ class Sep28kDataset(Dataset):
         spectrograms: List[np.ndarray],
         labels: List[List[int]],  # Always List[List[int]] for multi-label
         file_ids: List[str],
-        augmentation_prob: float = 0.4,
-        is_training: bool = False
+        augmentation_prob: float = 0.4,  # Matches improved architecture spec (0.3-0.5)
+        is_training: bool = False,
+        use_enhanced_augmentation: bool = True,
+        sample_rate: int = 16000
     ):
         self.spectrograms = spectrograms
         self.labels = labels
         self.file_ids = file_ids
         self.augmentation_prob = augmentation_prob
         self.is_training = is_training
+        self.use_enhanced_augmentation = use_enhanced_augmentation
         
         assert len(spectrograms) == len(labels) == len(file_ids)
         
@@ -40,6 +44,16 @@ class Sep28kDataset(Dataset):
         
         # Class mapping
         self.class_names = DYSFLUENT_CLASSES
+        
+        # Initialize enhanced augmentation pipeline if enabled
+        if self.use_enhanced_augmentation and self.is_training:
+            self.enhanced_augmentation = AudioAugmentation(
+                sample_rate=sample_rate,
+                apply_prob=augmentation_prob,
+                individual_aug_prob=0.5
+            )
+        else:
+            self.enhanced_augmentation = None
     
     def __len__(self) -> int:
         return len(self.spectrograms)
@@ -49,9 +63,15 @@ class Sep28kDataset(Dataset):
         label = self.labels[idx]
         file_id = self.file_ids[idx]
 
-        # Data Augmentation
-        if self.is_training and np.random.random() < self.augmentation_prob:
-            spectrogram = self._apply_augmentation(spectrogram)
+        # Apply augmentation during training only
+        if self.is_training:
+            if self.use_enhanced_augmentation and self.enhanced_augmentation is not None:
+                # Use enhanced augmentation pipeline
+                spectrogram = self._apply_enhanced_augmentation(spectrogram)
+            else:
+                # Fall back to basic augmentation
+                if np.random.random() < self.augmentation_prob:
+                    spectrogram = self._apply_basic_augmentation(spectrogram)
         
         # Multi-label: return binary vector for BCEWithLogitsLoss
         return {
@@ -60,44 +80,64 @@ class Sep28kDataset(Dataset):
             'file_id': file_id
         }
     
-    def _apply_augmentation(self, spectrogram: np.ndarray) -> np.ndarray:
-        """Apply multiple augmentation techniques."""
+    def _apply_enhanced_augmentation(self, spectrogram: np.ndarray) -> np.ndarray:
+        """Apply enhanced augmentation pipeline to spectrogram."""
+        # Apply enhanced augmentation (spectrogram-domain only since we don't have audio here)
+        return self.enhanced_augmentation.apply_augmentation(spectrogram=spectrogram)
+    
+    def _apply_basic_augmentation(self, spectrogram: np.ndarray) -> np.ndarray:
+        """Apply basic augmentation techniques (fallback method)."""
         aug_spec = spectrogram.copy()
 
-        # 1. Frequency Masking - simulate spectral interference
-        if np.random.random() < 0.25:
-            freq_mask_param = min(4, aug_spec.shape[0] // 10)  # More conservative
+        # 1. Frequency Masking (SpecAugment-style)
+        if np.random.random() < 0.3:  # Reduced probability for more conservative augmentation
+            freq_mask_param = min(4, aug_spec.shape[0] // 10)
             if freq_mask_param > 0:
                 f = np.random.randint(1, freq_mask_param + 1)
                 f0 = np.random.randint(0, aug_spec.shape[0] - f)
-                aug_spec[f0:f0+f, :] = aug_spec[f0:f0+f, :].mean()  # Mean instead of zero
+                aug_spec[f0:f0+f, :] = aug_spec[f0:f0+f, :].mean()
 
-        # 2. Time Masking - simulate brief signal dropouts
-        if np.random.random() < 0.25:
-            time_mask_param = min(8, aug_spec.shape[1] // 15)  # Smaller masks
+        # 2. Time Masking (SpecAugment-style)
+        if np.random.random() < 0.3:
+            time_mask_param = min(10, aug_spec.shape[1] // 10)
             if time_mask_param > 0:
                 t = np.random.randint(1, time_mask_param + 1)
                 t0 = np.random.randint(0, aug_spec.shape[1] - t)
-                aug_spec[:, t0:t0+t] = aug_spec[:, t0:t0+t].mean()  # Mean instead of zero
+                aug_spec[:, t0:t0+t] = aug_spec[:, t0:t0+t].mean()
 
-        # 3. Background Noise (Sheikh et al. 2023)
-        # "adding different types of background noise and reverberation and babble"
-        if np.random.random() < 0.3:
-            noise_types = ['gaussian', 'white', 'pink']
-            noise_type = np.random.choice(noise_types)
-
-            if noise_type == 'gaussian':
-                # Low-level Gaussian noise for recording quality variation
-                noise_std = np.random.uniform(0.005, 0.02)  # Very conservative
-                noise = np.random.normal(0, noise_std, aug_spec.shape)
-                aug_spec = aug_spec + noise
+        # 3. Gaussian Noise Addition
+        if np.random.random() < 0.25:
+            noise_factor = np.random.uniform(0.001, 0.005)
+            noise = np.random.normal(0, noise_factor, aug_spec.shape)
+            aug_spec += noise
 
         # 4. Amplitude Scaling
-        if np.random.random() < 0.4:
-            scale_factor = np.random.uniform(0.85, 1.15)
-            aug_spec = aug_spec * scale_factor
+        if np.random.random() < 0.3:
+            scale_factor = np.random.uniform(0.8, 1.2)
+            aug_spec *= scale_factor
 
         return aug_spec
+    
+    def get_class_distribution(self) -> Dict[str, int]:
+        """Get distribution of classes in the dataset."""
+        class_counts = {class_name: 0 for class_name in self.class_names}
+        
+        for label in self.labels:
+            for i, class_name in enumerate(self.class_names):
+                if label[i] == 1:  # Binary label
+                    class_counts[class_name] += 1
+        
+        return class_counts
+    
+    def get_augmentation_stats(self) -> Dict[str, any]:
+        """Get statistics about augmentation configuration."""
+        return {
+            'use_enhanced_augmentation': self.use_enhanced_augmentation,
+            'augmentation_prob': self.augmentation_prob,
+            'is_training': self.is_training,
+            'enhanced_augmentation_available': self.enhanced_augmentation is not None
+        }
+
 
     @staticmethod
     def stratified_split(
