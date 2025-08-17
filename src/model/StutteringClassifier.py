@@ -13,7 +13,7 @@ class StutteringClassifier(nn.Module):
     - Pre-trained Whisper encoder (6 layers)
     - Selective layer freezing strategies
     - Projection layer for dimensionality reduction
-    - Multi-class or multi-label classification head
+    - Multi-label classification head only
     """
     
     def __init__(
@@ -22,15 +22,13 @@ class StutteringClassifier(nn.Module):
         num_classes: int = 6,
         projection_dim: int = 256,
         dropout_rate: float = 0.1,
-        freeze_strategy: str = "base",  # "base", "1", "2"
-        multi_label: bool = False  # Multi-label vs single-label classification
+        freeze_strategy: str = "base"  # "base", "1", "2"
     ):
         super().__init__()
         
         self.num_classes = num_classes
         self.projection_dim = projection_dim
         self.freeze_strategy = freeze_strategy
-        self.multi_label = multi_label
         
         # Load pre-trained Whisper model
         self.whisper = WhisperModel.from_pretrained(model_name)
@@ -47,21 +45,12 @@ class StutteringClassifier(nn.Module):
         # Projection layer for dimensionality reduction
         self.projector = nn.Linear(self.encoder_dim, projection_dim)
         
-        # Classification head - different for multi-label vs single-label
-        if multi_label:
-            # Multi-label: independent binary classifiers for each disfluency type
-            self.classifier = nn.Sequential(
-                nn.Dropout(dropout_rate),
-                nn.Linear(projection_dim, num_classes)
-                # No final activation - will use sigmoid during training
-            )
-        else:
-            # Single-label: standard multi-class classification
-            self.classifier = nn.Sequential(
-                nn.Dropout(dropout_rate),
-                nn.Linear(projection_dim, num_classes)
-                # No final activation - will use softmax during inference
-            )
+        # Multi-label classification head - independent binary classifiers for each disfluency type
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout_rate),
+            nn.Linear(projection_dim, num_classes)
+            # No final activation - will use sigmoid during training
+        )
         
         # Initialize projection and classification layers
         self._initialize_weights()

@@ -30,85 +30,34 @@ from src.components.Dataset import Sep28kDataset
 DYSFLUENT_CLASSES = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
 
 
-def load_csv_data(csv_file: str, multi_label: bool = False) -> Tuple[List[str], List, List[str]]:
+def load_csv_data(csv_file: str) -> Tuple[List[str], List[List[int]], List[str]]:
     """
     Load data from CSV file with binary disfluency labels.
+    Always returns multi-label format.
     
-    Expected CSV format:
-    filepath,Block,Prolongation,SoundRep,WordRep,Interjection,NoStutteredWords
-    /path/file.wav,0,1,0,0,0,0
-    
-    Args:
-        csv_file: Path to CSV file with binary labels
-        multi_label: If True, treats as multi-label problem; if False, converts to single-label
-        
     Returns:
-        Tuple of (audio_paths, labels, file_ids)
+        Tuple of (audio_paths, labels, file_ids) where labels are List[List[int]]
     """
-    if not Path(csv_file).exists():
-        raise FileNotFoundError(f"CSV file not found: {csv_file}")
-    
-    # Load CSV
     df = pd.read_csv(csv_file)
     
-    # Disfluency columns in order matching the paper
-    disfluency_cols = DYSFLUENT_CLASSES
+    # Extract paths and IDs
+    audio_paths = df['audio_path'].tolist()
+    file_ids = df['file_id'].tolist()
     
-    audio_paths = []
+    # Extract binary labels for each disfluency type
+    label_columns = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
     labels = []
-    file_ids = []
     
     for _, row in df.iterrows():
-        audio_path = row['filepath']
-        if Path(audio_path).exists():
-            audio_paths.append(audio_path)
-            
-            if multi_label:
-                # Multi-label: return binary vector for each disfluency type
-                label_vector = [int(row[col]) for col in disfluency_cols]
-                labels.append(label_vector)
-            else:
-                # Single-label: convert binary to single class index
-                label_vector = [int(row[col]) for col in disfluency_cols]
-                
-                # Find the first positive class (1-hot encoding to class index)
-                # Map to class indices: Block=0, Prolongation=1, SoundRep=2, WordRep=3, Interjection=4, NoStutteredWords=5
-                single_label = 5  # Default to NoStutteredWords
-                for i, val in enumerate(label_vector[:-1]):  # Exclude NoStutteredWords from loop
-                    if val == 1:
-                        single_label = i
-                        break
-                
-                labels.append(single_label)
-            
-            # Create file ID from filename
-            file_id = Path(audio_path).stem
-            file_ids.append(file_id)
-        else:
-            print(f"Warning: Audio file not found: {audio_path}")
-    
-    print(f"Loaded {len(audio_paths)} valid audio files")
-    print(f"Label format: {'Multi-label' if multi_label else 'Single-label'}")
-    
-    if multi_label:
-        # Print multi-label statistics
-        labels_array = np.array(labels)
-        for i, class_name in enumerate(DYSFLUENT_CLASSES):
-            positive_count = np.sum(labels_array[:, i])
-            print(f"  {class_name}: {positive_count} positive samples")
-    else:
-        # Print single-label statistics
-        from collections import Counter
-        label_counts = Counter(labels)
-        for i, class_name in enumerate(DYSFLUENT_CLASSES):
-            count = label_counts.get(i, 0)
-            print(f"  Class {i} ({class_name}): {count} samples")
+        # Create binary label vector for multi-label classification
+        label_vector = [int(row[col]) for col in label_columns]
+        labels.append(label_vector)
     
     return audio_paths, labels, file_ids
 
 
-def evaluate_model(model, test_loader, device, multi_label=False):
-    """Evaluate model with proper multi-label support."""
+def evaluate_model(model, test_loader, device):
+    """Evaluate model on test set - multi-label classification only."""
     model.eval()
     all_predictions = []
     all_labels = []
@@ -121,22 +70,13 @@ def evaluate_model(model, test_loader, device, multi_label=False):
             
             outputs = model(input_features)
             
-            if multi_label:
-                # Multi-label: use sigmoid for probabilities
-                probabilities = torch.sigmoid(outputs['logits'])
-                predictions = probabilities > 0.5  # Threshold at 0.5
-                
-                all_predictions.extend(predictions.cpu().numpy())
-                all_labels.extend(labels.cpu().numpy())
-                all_probabilities.extend(probabilities.cpu().numpy())
-            else:
-                # Single-label: use softmax + argmax
-                probabilities = torch.softmax(outputs['logits'], dim=1)
-                predictions = torch.argmax(outputs['logits'], dim=1)
-                
-                all_predictions.extend(predictions.cpu().numpy())
-                all_labels.extend(labels.cpu().numpy())
-                all_probabilities.extend(probabilities.cpu().numpy())
+            # Multi-label: use sigmoid for probabilities
+            probabilities = torch.sigmoid(outputs['logits'])
+            predictions = probabilities > 0.5  # Threshold at 0.5
+            
+            all_predictions.extend(predictions.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+            all_probabilities.extend(probabilities.cpu().numpy())
     
     # Calculate metrics
     from sklearn.metrics import f1_score, classification_report, confusion_matrix
@@ -146,34 +86,25 @@ def evaluate_model(model, test_loader, device, multi_label=False):
     
     class_names = DYSFLUENT_CLASSES
     
-    if multi_label:
-        # Multi-label classification report
-        report = {}
-        for i, class_name in enumerate(class_names):
-            y_true_class = [row[i] for row in all_labels]
-            y_pred_class = [row[i] for row in all_predictions]
-            
-            report[class_name] = {
-                'precision': precision_score(y_true_class, y_pred_class, zero_division=0),
-                'recall': recall_score(y_true_class, y_pred_class, zero_division=0),
-                'f1-score': f1_score(y_true_class, y_pred_class, zero_division=0),
-                'support': sum(y_true_class)
-            }
+    # Multi-label classification report
+    report = {}
+    for i, class_name in enumerate(class_names):
+        y_true_class = [row[i] for row in all_labels]
+        y_pred_class = [row[i] for row in all_predictions]
         
-        # For multi-label, confusion matrix is per-class
-        cm = {}
-        for i, class_name in enumerate(class_names):
-            y_true_class = [row[i] for row in all_labels]
-            y_pred_class = [row[i] for row in all_predictions]
-            cm[class_name] = confusion_matrix(y_true_class, y_pred_class).tolist()
-    else:
-        # Single-label classification report
-        report = classification_report(
-            all_labels, all_predictions, 
-            target_names=class_names, 
-            output_dict=True
-        )
-        cm = confusion_matrix(all_labels, all_predictions).tolist()
+        report[class_name] = {
+            'precision': precision_score(y_true_class, y_pred_class, zero_division=0),
+            'recall': recall_score(y_true_class, y_pred_class, zero_division=0),
+            'f1-score': f1_score(y_true_class, y_pred_class, zero_division=0),
+            'support': sum(y_true_class)
+        }
+    
+    # Multi-label confusion matrix (per-class binary matrices)
+    cm = {}
+    for i, class_name in enumerate(class_names):
+        y_true_class = [row[i] for row in all_labels]
+        y_pred_class = [row[i] for row in all_predictions]
+        cm[class_name] = confusion_matrix(y_true_class, y_pred_class).tolist()
     
     return {
         'f1_weighted': f1_weighted,
@@ -187,7 +118,7 @@ def evaluate_model(model, test_loader, device, multi_label=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Whisper Stuttering Classification')
+    parser = argparse.ArgumentParser(description='Whisper Multi-Label Stuttering Classification')
     parser.add_argument('--csv_file', type=str, help='Path to CSV file with binary labels')
     parser.add_argument('--strategy', type=str, default='base', 
                        choices=['base', '1', '2'],
@@ -195,8 +126,6 @@ def main():
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs')
     parser.add_argument('--lr', type=float, default=2.5e-5, help='Learning rate')
-    parser.add_argument('--multi_label', action='store_true',
-                       help='Treat as multi-label classification problem')
     parser.add_argument('--output_dir', type=str, default='./results',
                        help='Output directory for results')
     
@@ -205,7 +134,6 @@ def main():
     # Setup
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
-    print(f"Multi-label mode: {args.multi_label}")
     
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     
@@ -224,7 +152,7 @@ def main():
         raise ValueError("--csv_file required")
     
     print(f"Loading SEP-28k data from {args.csv_file}...")
-    audio_paths, labels, file_ids = load_csv_data(args.csv_file, multi_label=args.multi_label)
+    audio_paths, labels, file_ids = load_csv_data(args.csv_file, multi_label=True)
     
     # Process audio files
     preprocessor = AudioPreprocessor()
@@ -263,19 +191,17 @@ def main():
     
     # Train single model
     print(f"\nTraining with strategy: {args.strategy}")
-    print(f"Multi-label mode: {args.multi_label}")
+    print("Multi-label classification")
     
     model = StutteringClassifier(
         freeze_strategy=args.strategy,
-        num_classes=6,
-        multi_label=args.multi_label
+        num_classes=6
     )
     
     train_loader, val_loader = create_data_loaders(
         train_spectrograms, train_labels, train_ids,
         val_spectrograms, val_labels, val_ids,
-        batch_size=args.batch_size,
-        multi_label=args.multi_label
+        batch_size=args.batch_size
     )
     
     trainer = StutteringDetectorTrainer(
@@ -286,12 +212,11 @@ def main():
         learning_rate=args.lr,
         num_epochs=args.epochs,
         save_dir=f"{args.output_dir}/models",
-        log_dir=f"{args.output_dir}/logs",
-        multi_label=args.multi_label
+        log_dir=f"{args.output_dir}/logs"
     )
     
     training_results = trainer.train()
-    eval_results = evaluate_model(model, val_loader, device, multi_label=args.multi_label)
+    eval_results = evaluate_model(model, val_loader, device)
     
     # Save results   
     with open(f"{args.output_dir}/training_results.json", 'w') as f:

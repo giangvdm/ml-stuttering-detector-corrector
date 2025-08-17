@@ -19,7 +19,7 @@ class StutteringDetectorTrainer:
     
     Implements the training configuration from 'Whisper in Focus' paper:
     - Batch size: 32
-    - Learning rate: 2.5e-5
+    - Learning rate: 1e-4 (PEFT strategy) (2.5e-5 as Whisper originally recommends)
     - Cross-entropy loss
     - Early stopping
     """
@@ -30,13 +30,11 @@ class StutteringDetectorTrainer:
         train_loader: DataLoader,
         val_loader: DataLoader,
         device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
-        # learning_rate: float = 2.5e-5, # Recommended by Whisper
-        learning_rate: float = 1e-5,
+        learning_rate: float = 1e-4,
         num_epochs: int = 30,
         patience: int = 3,
         save_dir: str = './models',
-        log_dir: str = './logs',
-        multi_label: bool = False
+        log_dir: str = './logs'
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
@@ -44,7 +42,6 @@ class StutteringDetectorTrainer:
         self.device = device
         self.num_epochs = num_epochs
         self.patience = patience
-        self.multi_label = multi_label
         
         # Create directories
         Path(save_dir).mkdir(parents=True, exist_ok=True)
@@ -56,33 +53,28 @@ class StutteringDetectorTrainer:
         self.optimizer = optim.AdamW(
             model.parameters(),
             lr=learning_rate,
-            weight_decay=0.05, # Higher weight decay
+            weight_decay=0.05,
             eps=1e-8,
-            betas=(0.9, 0.98) # Different beta values for stability
+            betas=(0.9, 0.98)
         )
 
         # Setup logging
         self._setup_logging()
         
-        # Calculate class weights BEFORE creating loss function
+        # Calculate class weights for multi-label classification
         self.logger.info("Calculating class weights for imbalanced dataset...")
-        weights = self._calculate_class_weights(train_loader, multi_label)
+        weights = self._calculate_class_weights(train_loader)
         weights = weights.to(device)
         
-        # WEIGHTED Loss function depends on single vs multi-label
-        if multi_label:
-            # For multi-label: use pos_weight parameter
-            self.criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
-        else:
-            # For single-label: use weight parameter  
-            self.criterion = nn.CrossEntropyLoss(weight=weights)
+        # Multi-label loss function only
+        self.criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
         
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
             mode='max',
-            factor=0.3,  # Reduce LR more aggressively
-            patience=2,  # Reduce LR faster
-            min_lr=1e-6  # Lower minimum LR
+            factor=0.3,
+            patience=2,
+            min_lr=1e-6
         )
         
         # Training tracking
@@ -105,62 +97,27 @@ class StutteringDetectorTrainer:
         )
         self.logger = logging.getLogger(__name__)
 
-    def _calculate_class_weights(self, train_loader: DataLoader, multi_label: bool = False):
-        """
-        Calculate class weights for handling imbalanced datasets.
+    def _calculate_class_weights(self, train_loader) -> torch.Tensor:
+        """Calculate class weights for imbalanced multi-label dataset."""
+        class_counts = torch.zeros(self.model.num_classes)
+        total_samples = 0
         
-        Args:
-            train_loader: Training data loader
-            multi_label: Whether this is multi-label classification
+        for batch in train_loader:
+            labels = batch['labels']  # [batch_size, num_classes]
             
-        Returns:
-            torch.Tensor: Class weights for loss function
-        """
-        if multi_label:
-            # For multi-label: calculate positive weights for each class
-            class_counts = torch.zeros(6)  # 6 classes
-            total_samples = 0
-            
-            for batch in train_loader:
-                labels = batch['labels']  # Shape: [batch_size, num_classes]
-                class_counts += labels.sum(dim=0)
-                total_samples += labels.shape[0]
-            
-            # Calculate positive class weights: total_samples / (2 * positive_count)
-            pos_weights = total_samples / (2 * class_counts)
-            
-            # Handle edge case where class has no positive samples
-            pos_weights = torch.where(class_counts > 0, pos_weights, torch.tensor(1.0))
-            
-            self.logger.info("Multi-label positive class weights:")
-            class_names = DYSFLUENT_CLASSES
-            for i, (name, weight) in enumerate(zip(class_names, pos_weights)):
-                self.logger.info(f"  {name}: {weight:.4f} (positive samples: {class_counts[i]:.0f})")
-            
-            return pos_weights
+            # Count positive samples for each class
+            class_counts += labels.sum(dim=0)
+            total_samples += labels.shape[0]
         
-        else:
-            # For single-label: calculate class weights
-            class_counts = torch.zeros(6)  # 6 classes: 0-5
-            
-            for batch in train_loader:
-                labels = batch['labels'].squeeze()
-                for class_idx in range(6):
-                    class_counts[class_idx] += (labels == class_idx).sum()
-            
-            # Calculate inverse frequency weights
-            total_samples = class_counts.sum()
-            class_weights = total_samples / (6 * class_counts)  # 6 classes
-            
-            # Handle edge case where class has no samples
-            class_weights = torch.where(class_counts > 0, class_weights, torch.tensor(1.0))
-            
-            self.logger.info("Single-label class weights:")
-            class_names = DYSFLUENT_CLASSES
-            for i, (name, weight) in enumerate(zip(class_names, class_weights)):
-                self.logger.info(f"  Class {i} ({name}): {weight:.4f} (samples: {class_counts[i]:.0f})")
-            
-            return class_weights
+        # Calculate positive weight for BCEWithLogitsLoss
+        # pos_weight = negative_samples / positive_samples
+        negative_counts = total_samples - class_counts
+        pos_weights = negative_counts / (class_counts + 1e-7)  # Add small epsilon to avoid division by zero
+        
+        self.logger.info(f"Class distribution (positive samples): {class_counts.tolist()}")
+        self.logger.info(f"Calculated pos_weights: {pos_weights.tolist()}")
+        
+        return pos_weights
     
     def train_epoch(self) -> float:
         """Train for one epoch."""
@@ -173,11 +130,7 @@ class StutteringDetectorTrainer:
         for batch in progress_bar:
             # Move to device
             input_features = batch['input_features'].to(self.device)
-            
-            if self.multi_label:
-                labels = batch['labels'].to(self.device)  # [batch_size, num_classes]
-            else:
-                labels = batch['labels'].to(self.device)  # [batch_size]
+            labels = batch['labels'].to(self.device)  # [batch_size, num_classes]
             
             # Forward pass
             self.optimizer.zero_grad()
@@ -210,11 +163,7 @@ class StutteringDetectorTrainer:
         with torch.no_grad():
             for batch in tqdm(self.val_loader, desc="Validation"):
                 input_features = batch['input_features'].to(self.device)
-                
-                if self.multi_label:
-                    labels = batch['labels'].to(self.device)
-                else:
-                    labels = batch['labels'].to(self.device)
+                labels = batch['labels'].to(self.device)
                 
                 outputs = self.model(input_features)
                 loss = self.criterion(outputs['logits'], labels)
@@ -222,67 +171,39 @@ class StutteringDetectorTrainer:
                 total_loss += loss.item()
                 num_batches += 1
                 
-                # Get predictions
-                if self.multi_label:
-                    # Multi-label: apply sigmoid and threshold at 0.5
-                    predictions = torch.sigmoid(outputs['logits']) > 0.5
-                    all_predictions.extend(predictions.cpu().numpy())
-                    all_labels.extend(labels.cpu().numpy())
-                else:
-                    # Single-label: argmax
-                    predictions = torch.argmax(outputs['logits'], dim=1)
-                    all_predictions.extend(predictions.cpu().numpy())
-                    all_labels.extend(labels.cpu().numpy())
+                # Multi-label predictions: apply sigmoid and threshold at 0.5
+                predictions = torch.sigmoid(outputs['logits']) > 0.5
+                all_predictions.extend(predictions.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
         
         avg_loss = total_loss / num_batches
         
-        # Calculate metrics
-        if self.multi_label:
-            # Multi-label F1 calculation
-            f1_weighted = f1_score(all_labels, all_predictions, average='weighted')
-            f1_per_class = f1_score(all_labels, all_predictions, average=None)
+        # Multi-label F1 calculation
+        f1_weighted = f1_score(all_labels, all_predictions, average='weighted')
+        f1_per_class = f1_score(all_labels, all_predictions, average=None)
+        
+        # Multi-label classification report
+        report = {}
+        for i, class_name in enumerate(DYSFLUENT_CLASSES):
+            y_true_class = [row[i] for row in all_labels]
+            y_pred_class = [row[i] for row in all_predictions]
             
-            # Multi-label classification report
-            report = {}
-            for i, class_name in enumerate(DYSFLUENT_CLASSES):
-                y_true_class = [row[i] for row in all_labels]
-                y_pred_class = [row[i] for row in all_predictions]
-                
-                if sum(y_true_class) > 0:  # Only calculate if class has positive samples
-                    report[class_name] = {
-                        'precision': precision_score(y_true_class, y_pred_class, zero_division=0),
-                        'recall': recall_score(y_true_class, y_pred_class, zero_division=0),
-                        'f1-score': f1_score(y_true_class, y_pred_class, zero_division=0),
-                        'support': sum(y_true_class)
-                    }
-        else:
-            # Single-label F1 calculation  
-            f1_weighted = f1_score(all_labels, all_predictions, average='weighted')
-            f1_per_class = f1_score(all_labels, all_predictions, average=None)
-            
-            # Single-label classification report
-            report = classification_report(
-                all_labels, all_predictions, 
-                target_names=DYSFLUENT_CLASSES, 
-                output_dict=True,
-                zero_division=0
-            )
+            if sum(y_true_class) > 0:  # Only calculate if class has positive samples
+                report[class_name] = {
+                    'precision': precision_score(y_true_class, y_pred_class, zero_division=0),
+                    'recall': recall_score(y_true_class, y_pred_class, zero_division=0),
+                    'f1-score': f1_score(y_true_class, y_pred_class, zero_division=0),
+                    'support': sum(y_true_class)
+                }
 
-        # Calculate per-class accuracy  
-        per_class_acc = self._calculate_per_class_accuracy(all_labels, all_predictions)
-        
-        # Add per-class accuracy to the report for consistent output format
-        if self.multi_label:
-            for class_name, accuracy in per_class_acc.items():
-                if class_name in report:
-                    report[class_name]['accuracy'] = accuracy
-        else:
-            for i, class_name in enumerate(DYSFLUENT_CLASSES):
-                if str(i) in report:
-                    report[str(i)]['accuracy'] = per_class_acc[class_name]
-        
+        # Calculate per-class accuracy and confusion matrix
         per_class_acc = self._calculate_per_class_accuracy(all_labels, all_predictions)
         cm_data = self._calculate_confusion_matrix(all_labels, all_predictions)
+
+        # Add per-class accuracy to the report
+        for class_name, accuracy in per_class_acc.items():
+            if class_name in report:
+                report[class_name]['accuracy'] = accuracy
 
         return avg_loss, f1_weighted, report, per_class_acc, cm_data
     
@@ -451,26 +372,23 @@ class StutteringDetectorTrainer:
 
 def create_data_loaders(
     train_spectrograms: List[np.ndarray],
-    train_labels: List,  # Can be List[int] or List[List[int]] for multi-label
+    train_labels: List[List[int]],  # Always multi-label format
     train_ids: List[str],
     val_spectrograms: List[np.ndarray],
-    val_labels: List,
+    val_labels: List[List[int]],  # Always multi-label format
     val_ids: List[str],
     batch_size: int = 32,
-    num_workers: int = 4,
-    multi_label: bool = False
+    num_workers: int = 4
 ) -> Tuple[DataLoader, DataLoader]:
-    """Create training and validation data loaders."""
+    """Create training and validation data loaders for multi-label classification."""
     
     train_dataset = Sep28kDataset(
         train_spectrograms, train_labels, train_ids, 
-        multi_label=multi_label,
         is_training=True
     )
     
     val_dataset = Sep28kDataset(
-        val_spectrograms, val_labels, val_ids, 
-        multi_label=multi_label
+        val_spectrograms, val_labels, val_ids
     )
     
     train_loader = DataLoader(
