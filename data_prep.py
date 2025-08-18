@@ -213,12 +213,16 @@ if __name__ == "__main__":
     
     output_path = os.path.join(dataset_root_dir, all_labels_file)
 
-    # Download latest version
-    path = kagglehub.dataset_download("vudominhgiang/sep-28k-maintained")
-    print("Path to dataset files:", path)
+    # SEP-28k - Download latest version
+    sep28k_path = kagglehub.dataset_download("vudominhgiang/sep-28k-maintained")
+    print("Path to dataset files:", sep28k_path)
     
     # Process labels with quality filtering
     success = preprocess_labels(merged_labels_file, output_path, real_audio_root_dir)
+
+    # UCLASS - Download latest version
+    uclass_path = kagglehub.dataset_download("vudominhgiang/uclass-stuttered-speech-clips-sep-28k-format")
+    print("Path to dataset files:", uclass_path)
     
     if success:
         # Validate a sample of audio files
