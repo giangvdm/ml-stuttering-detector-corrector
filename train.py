@@ -11,6 +11,7 @@ Usage:
     python train.py --csv_file all_labels.csv --epochs 20
 """
 
+import os
 import argparse
 import torch
 import numpy as np
@@ -19,6 +20,7 @@ import json
 import logging
 from typing import List, Tuple, Dict
 import pandas as pd
+from dotenv import load_dotenv
 from sklearn.metrics import precision_score, recall_score
 
 # Import our modules
@@ -26,6 +28,7 @@ from src.model.StutteringClassifier import create_model
 from src.components.AudioPreprocessor import AudioPreprocessor
 from src.components.Trainer import StutteringDetectorTrainer, create_data_loaders
 from src.components.Dataset import Sep28kDataset
+from test import test_model
 
 DYSFLUENT_CLASSES = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
 
@@ -120,6 +123,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+    load_dotenv()
     
     # Device setup
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -221,6 +225,97 @@ def main():
     print(f"Best validation F1: {training_results['best_f1']:.4f}")
     print(f"Final test F1: {eval_results['f1_weighted']:.4f}")
 
+    # Testing with UCLASS dataset
+    print(f"\n{'='*50}")
+    print("STARTING TEST PHASE")
+    print(f"{'='*50}")
+    
+    try:
+        # Load the best trained model for testing
+        best_model_path = f"{args.output_dir}/models/best_model_f1_{training_results['best_f1']:.4f}.pth"
+        
+        if os.path.exists(best_model_path):
+            print(f"Loading best model from: {best_model_path}")
+            
+            # Load model checkpoint
+            checkpoint = torch.load(best_model_path, map_location=device, weights_only=False)
+            
+            # Create fresh model instance
+            test_model_instance = create_model(
+                model_name="openai/whisper-base",
+                num_classes=6
+            )
+            
+            # Load trained weights
+            test_model_instance.load_state_dict(checkpoint['model_state_dict'])
+            test_model_instance.to(device)
+            
+            # Run test
+            test_annotations_path = os.getenv("TEST_LABEL_FILE_NAME")
+            print(f"Testing on dataset: {test_annotations_path}")
+            
+            test_results = test_model(
+                model=test_model_instance,
+                test_annotations_path=test_annotations_path,
+                device=device,
+                batch_size=args.batch_size,
+                output_dir=f"{args.output_dir}/test_results"
+            )
+            
+            # Log test results
+            print(f"\n{'='*50}")
+            print("TEST RESULTS SUMMARY")
+            print(f"{'='*50}")
+            print(f"Test Samples: {test_results['test_samples']}")
+            print(f"Test F1 (weighted): {test_results['f1_weighted']:.4f}")
+            print(f"Test F1 (macro): {test_results['f1_macro']:.4f}")
+            print(f"Test Accuracy: {test_results['accuracy']:.4f}")
+            print(f"Test Precision: {test_results['precision_weighted']:.4f}")
+            print(f"Test Recall: {test_results['recall_weighted']:.4f}")
+            
+            print(f"\nPer-class F1 scores:")
+            for class_name, f1 in test_results['per_class_f1'].items():
+                print(f"  {class_name}: {f1:.4f}")
+            
+            # Save comprehensive results
+            final_results = {
+                'training': {
+                    'best_validation_f1': float(training_results['best_f1']),
+                    'final_validation_f1': float(eval_results['f1_weighted']),
+                    'trainable_params': model.get_trainable_parameters()['trainable_params'],
+                    'frozen_params': model.get_trainable_parameters()['total_params'] - model.get_trainable_parameters()['trainable_params']
+                },
+                'testing': {
+                    'test_f1_weighted': test_results['f1_weighted'],
+                    'test_f1_macro': test_results['f1_macro'],
+                    'test_accuracy': test_results['accuracy'],
+                    'test_samples': test_results['test_samples'],
+                    'per_class_f1': test_results['per_class_f1']
+                }
+            }
+            
+            with open(f"{args.output_dir}/complete_results.json", 'w') as f:
+                json.dump(final_results, f, indent=2)
+            
+            print(f"\nComplete results saved to: {args.output_dir}/complete_results.json")
+            print(f"Detailed test results saved to: {args.output_dir}/test_results/")
+            
+        else:
+            print(f"Warning: Best model checkpoint not found at {best_model_path}")
+            print("Skipping test phase.")
+            
+    except FileNotFoundError as e:
+        print(f"Test dataset not found: {e}")
+        print("Please update TEST_ANNOTATIONS_PATH with the correct path.")
+        print("Skipping test phase.")
+        
+    except Exception as e:
+        print(f"Error during testing: {e}")
+        print("Training completed successfully, but testing failed.")
+        
+    print(f"\n{'='*50}")
+    print("EXPERIMENT COMPLETED")
+    print(f"{'='*50}")
 
 if __name__ == "__main__":
     main()
