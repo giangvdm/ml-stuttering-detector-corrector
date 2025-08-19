@@ -236,9 +236,7 @@ def _calculate_detailed_metrics(
     predictions: np.ndarray,
     probabilities: np.ndarray,
     logger: logging.Logger
-) -> Dict:
-    """Calculate comprehensive evaluation metrics."""
-    
+) -> Dict:   
     # Overall metrics
     f1_weighted = f1_score(true_labels, predictions, average='weighted', zero_division=0)
     f1_macro = f1_score(true_labels, predictions, average='macro', zero_division=0)
@@ -247,8 +245,15 @@ def _calculate_detailed_metrics(
     precision_weighted = precision_score(true_labels, predictions, average='weighted', zero_division=0)
     recall_weighted = recall_score(true_labels, predictions, average='weighted', zero_division=0)
     
-    # Accuracy (exact match for multi-label)
-    accuracy = np.mean(np.all(true_labels == predictions, axis=1))
+    # Use Hamming accuracy instead of exact-match accuracy
+    hamming_accuracy = np.mean(true_labels == predictions)  # Per-label accuracy
+    exact_match_ratio = np.mean(np.all(true_labels == predictions, axis=1))  # Keep for comparison
+    
+    # Calculate Jaccard score (multi-label specific)
+    intersection = np.sum((true_labels == 1) & (predictions == 1), axis=1)
+    union = np.sum((true_labels == 1) | (predictions == 1), axis=1)
+    jaccard_per_sample = np.where(union == 0, 1.0, intersection / union)
+    jaccard_score = np.mean(jaccard_per_sample)
     
     # Per-class metrics
     per_class_metrics = {}
@@ -259,7 +264,6 @@ def _calculate_detailed_metrics(
         y_true = true_labels[:, i]
         y_pred = predictions[:, i]
         
-        # Per-class F1, precision, recall
         class_f1 = f1_score(y_true, y_pred, zero_division=0)
         class_precision = precision_score(y_true, y_pred, zero_division=0)
         class_recall = recall_score(y_true, y_pred, zero_division=0)
@@ -271,14 +275,12 @@ def _calculate_detailed_metrics(
         }
         per_class_f1[class_name] = float(class_f1)
         
-        # Confusion matrix
         if len(np.unique(y_true)) > 1:
             cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
             confusion_matrices[class_name] = cm.tolist()
         else:
             confusion_matrices[class_name] = []
         
-        # Log per-class metrics
         logger.info(f"{class_name}: F1={class_f1:.3f}, P={class_precision:.3f}, R={class_recall:.3f}")
     
     # Classification report
@@ -289,13 +291,20 @@ def _calculate_detailed_metrics(
         zero_division=0
     )
     
+    # Return proper multi-label metrics
     return {
         'f1_weighted': float(f1_weighted),
         'f1_macro': float(f1_macro),
         'f1_micro': float(f1_micro),
         'precision_weighted': float(precision_weighted),
         'recall_weighted': float(recall_weighted),
-        'accuracy': float(accuracy),
+        
+        # Use hamming accuracy as primary accuracy metric
+        'accuracy': float(hamming_accuracy),
+        'hamming_accuracy': float(hamming_accuracy),
+        'exact_match_ratio': float(exact_match_ratio),
+        'jaccard_score': float(jaccard_score),
+        
         'per_class_metrics': per_class_metrics,
         'per_class_f1': per_class_f1,
         'confusion_matrices': confusion_matrices,
