@@ -3,7 +3,7 @@ import os
 import kagglehub
 from dotenv import load_dotenv
 
-def preprocess_labels(input_csv_path, output_csv_path, base_audio_path):
+def preprocess_sep28k(input_csv_path, output_csv_path, base_audio_path):
     """
     Preprocesses the label data from a CSV file with quality filtering.
     
@@ -199,34 +199,60 @@ def validate_audio_files(csv_path, sample_size=100):
     
     return len(missing_files) == 0
 
+def process_uclass(input_csv_path, output_csv_path, dataset_root_dir):
+    print(f"Reading UCLASS annotation file from: {input_csv_path}")
+    try:
+        df = pd.read_csv(input_csv_path)
+    except FileNotFoundError:
+        print(f"ERROR: Input file not found at '{input_csv_path}'. Please check the path.")
+        return False
+    
+    print(f"UCLASS dataset size: {len(df)} rows")
+    print("--- Processing ---")
+
+    def prepare_file_path(base_filepath):
+        return os.path.join(dataset_root_dir, base_filepath)
+
+    df['filepath'] = df['filepath'].apply(prepare_file_path)
+
+    df.to_csv(output_csv_path, index=False)
+
+    print(f"Test label file saved to {output_csv_path}!")
 
 if __name__ == "__main__":
     load_dotenv()
 
-    dataset_root_dir = os.getenv("DATASET_ROOT_DIR")
+    sep28k_root_dir = os.getenv("SEP28K_ROOT_DIR")
     audio_root_dir = os.getenv("AUDIO_ROOT_DIR")
-    real_audio_root_dir = os.path.join(dataset_root_dir, audio_root_dir)
+    real_audio_root_dir = os.path.join(sep28k_root_dir, audio_root_dir)
     merged_labels_file = os.getenv("MERGED_LABEL_FILE_NAME")
-    merged_labels_file = os.path.join(dataset_root_dir, merged_labels_file)
+    merged_labels_file = os.path.join(sep28k_root_dir, merged_labels_file)
     all_labels_file = os.getenv("PROCESSED_LABEL_FILE_NAME")
-    all_labels_file = os.path.join(dataset_root_dir, all_labels_file)
+    all_labels_file = os.path.join(sep28k_root_dir, all_labels_file)
+    uclass_root_dir = os.getenv("UCLASS_ROOT_DIR")
+    uclass_labels_file = os.getenv("UCLASS_LABEL_FILE_NAME")
+    uclass_labels_file = os.path.join(uclass_root_dir, uclass_labels_file)
+    test_labels_file = os.getenv("TEST_LABEL_FILE_NAME")
     
-    output_path = os.path.join(dataset_root_dir, all_labels_file)
+    sep28k_output_path = os.path.join(sep28k_root_dir, all_labels_file)
 
     # SEP-28k - Download latest version
     sep28k_path = kagglehub.dataset_download("vudominhgiang/sep-28k-maintained")
     print("Path to dataset files:", sep28k_path)
     
     # Process labels with quality filtering
-    success = preprocess_labels(merged_labels_file, output_path, real_audio_root_dir)
+    success = preprocess_sep28k(merged_labels_file, sep28k_output_path, real_audio_root_dir)
 
     # UCLASS - Download latest version
     uclass_path = kagglehub.dataset_download("vudominhgiang/uclass-stuttered-speech-clips-sep-28k-format")
     print("Path to dataset files:", uclass_path)
+
+    # Process UCLASS label file
+    process_uclass(uclass_labels_file, test_labels_file, uclass_root_dir)
     
     if success:
         # Validate a sample of audio files
-        validate_audio_files(output_path, sample_size=50)
+        validate_audio_files(sep28k_output_path, sample_size=50)
         
         print("\n" + "="*50)
         print("PREPROCESSING COMPLETE")

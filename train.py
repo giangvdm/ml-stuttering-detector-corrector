@@ -251,12 +251,12 @@ def main():
             test_model_instance.to(device)
             
             # Run test
-            test_annotations_path = os.getenv("TEST_LABEL_FILE_NAME")
-            print(f"Testing on dataset: {test_annotations_path}")
+            test_labels_path = os.getenv("TEST_LABEL_FILE_NAME")
+            print(f"Testing on dataset: {test_labels_path}")
             
             test_results = test_model(
                 model=test_model_instance,
-                test_annotations_path=test_annotations_path,
+                test_annotations_path=test_labels_path,
                 device=device,
                 batch_size=args.batch_size,
                 output_dir=f"{args.output_dir}/test_results"
