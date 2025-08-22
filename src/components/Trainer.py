@@ -10,6 +10,7 @@ from tqdm import tqdm
 import json
 from pathlib import Path
 from src.components.Dataset import Sep28kDataset
+from src.utils.training_plotter import plot_training_metrics
 
 DYSFLUENT_CLASSES = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
 
@@ -300,6 +301,10 @@ class StutteringDetectorTrainer:
             if self.early_stop_counter >= self.patience:
                 self.logger.info(f"Early stopping triggered after {epoch + 1} epochs")
                 break
+
+        plot_path = Path(self.log_dir) / "training_metrics.png"
+        saved_path = plot_training_metrics(self.train_losses, self.val_losses, self.val_f1_scores, str(plot_path))
+        self.logger.info(f"Training plot saved: {saved_path}")
         
         return {
             'best_f1': self.best_f1,
