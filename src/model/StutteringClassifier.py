@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Optional
-from src.components.WhisperLoRAEncoder import LoRAWhisperEncoder, apply_lora_to_whisper
+from src.components.WhisperLoRAEncoder import apply_lora_to_whisper
+from src.components.DysfluencyClassificationHead import DisfluencyClassificationHead
 
 
 class StutteringClassifier(nn.Module):
@@ -20,12 +21,12 @@ class StutteringClassifier(nn.Module):
     
     def __init__(
         self,
-        model_name: str = "openai/whisper-base",
-        num_classes: int = 6,
-        lora_rank: int = 16,
-        lora_alpha: float = 32.0,
-        classification_dropout: float = 0.3,
-        num_lora_layers: int = 4
+        model_name: str,
+        num_classes: int,
+        lora_rank: int,
+        lora_alpha: float,
+        classification_dropout: float,
+        num_lora_layers: int
     ):
         super().__init__()
         
@@ -39,6 +40,7 @@ class StutteringClassifier(nn.Module):
             model_name=model_name,
             rank=lora_rank,
             alpha=lora_alpha,
+            dropout_rate=0,
             num_layers_from_end=num_lora_layers
         )
         
@@ -47,10 +49,11 @@ class StutteringClassifier(nn.Module):
         
         # 2. LoRA ADAPTED Classification Head
         # Following spec: Linear(D_hidden, 256) + Dropout(0.3) + Linear(256, num_classes)
-        self.classification_head = nn.Sequential(
-            nn.Linear(self.hidden_dim, 256),
-            nn.Dropout(classification_dropout),
-            nn.Linear(256, num_classes)
+        self.classification_head = DisfluencyClassificationHead(
+            input_dim=self.hidden_dim,
+            num_classes=num_classes,
+            hidden_dim=256,
+            dropout_rate=classification_dropout
         )
         
         # Initialize classification head weights
@@ -68,7 +71,7 @@ class StutteringClassifier(nn.Module):
     
     def _initialize_classification_head(self):
         """Initialize classification head with Xavier initialization."""
-        for module in self.classification_head:
+        for module in self.classification_head.modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
                 nn.init.zeros_(module.bias)
@@ -217,81 +220,3 @@ def create_model(
     print("=" * 50)
     
     return model
-
-
-class TrainingConfig:
-    """Training configuration matching the architecture specifications."""
-    
-    def __init__(
-        self,
-        learning_rate: float = 1e-4,  # As per spec
-        batch_size: int = 32,         # As per spec
-        max_epochs: int = 50,
-        early_stopping_patience: int = 10,
-        weight_decay: float = 0.01,
-        warmup_steps: int = 500,
-        gradient_clip_norm: float = 1.0,
-        augmentation_prob: float = 0.4  # Applied stochastically (p=0.3-0.5)
-    ):
-        self.learning_rate = learning_rate
-        self.batch_size = batch_size
-        self.max_epochs = max_epochs
-        self.early_stopping_patience = early_stopping_patience
-        self.weight_decay = weight_decay
-        self.warmup_steps = warmup_steps
-        self.gradient_clip_norm = gradient_clip_norm
-        self.augmentation_prob = augmentation_prob
-    
-    def get_optimizer(self, model: StutteringClassifier) -> torch.optim.Optimizer:
-        """Get optimizer configured for the architecture."""
-        # Only optimize trainable parameters (LoRA + classification head)
-        trainable_params = [p for p in model.parameters() if p.requires_grad]
-        
-        optimizer = torch.optim.AdamW(
-            trainable_params,
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-            betas=(0.9, 0.999),
-            eps=1e-8
-        )
-        
-        return optimizer
-    
-    def get_scheduler(self, optimizer: torch.optim.Optimizer, num_training_steps: int):
-        """Get learning rate scheduler with warmup."""
-        from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
-        
-        # Warmup scheduler
-        warmup_scheduler = LinearLR(
-            optimizer, 
-            start_factor=0.1, 
-            end_factor=1.0, 
-            total_iters=self.warmup_steps
-        )
-        
-        # Cosine annealing after warmup
-        cosine_scheduler = CosineAnnealingLR(
-            optimizer, 
-            T_max=num_training_steps - self.warmup_steps,
-            eta_min=self.learning_rate * 0.1
-        )
-        
-        # Combine warmup + cosine annealing
-        scheduler = SequentialLR(
-            optimizer,
-            schedulers=[warmup_scheduler, cosine_scheduler],
-            milestones=[self.warmup_steps]
-        )
-        
-        return scheduler
-    
-    def __str__(self) -> str:
-        return f"""TrainingConfig:
-    Learning Rate: {self.learning_rate}
-    Batch Size: {self.batch_size}
-    Max Epochs: {self.max_epochs}
-    Early Stopping: {self.early_stopping_patience} epochs
-    Weight Decay: {self.weight_decay}
-    Warmup Steps: {self.warmup_steps}
-    Gradient Clipping: {self.gradient_clip_norm}
-    Augmentation Prob: {self.augmentation_prob}"""

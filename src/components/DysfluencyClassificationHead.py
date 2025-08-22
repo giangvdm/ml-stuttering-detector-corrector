@@ -9,9 +9,9 @@ class DisfluencyClassificationHead(nn.Module):
     def __init__(
         self,
         input_dim: int,
+        hidden_dim: int,
         num_classes: int,
-        hidden_dim: int = 128,
-        dropout_rate: float = 0.1
+        dropout_rate: float,
     ):
         super().__init__()
         

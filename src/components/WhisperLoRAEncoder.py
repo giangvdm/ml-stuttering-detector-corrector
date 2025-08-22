@@ -183,10 +183,11 @@ class LoRAWhisperEncoder(nn.Module):
 
 
 def apply_lora_to_whisper(
-    model_name: str = "openai/whisper-base",
-    rank: int = 16,
-    alpha: float = 32.0,
-    num_layers_from_end: int = 4
+    model_name: str,
+    rank: int,
+    alpha: float,
+    dropout_rate: float,
+    num_layers_from_end: int
 ) -> LoRAWhisperEncoder:
     """
     Convenience function to create a LoRA-adapted Whisper encoder.
@@ -205,7 +206,7 @@ def apply_lora_to_whisper(
     lora_config = LoRAConfig(
         rank=rank,
         alpha=alpha,
-        dropout=0.0,
+        dropout=dropout_rate,
         target_modules=['q_proj', 'k_proj', 'v_proj', 'out_proj'],
         apply_to_layers=target_layers
     )

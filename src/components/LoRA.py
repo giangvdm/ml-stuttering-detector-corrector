@@ -17,9 +17,9 @@ class LoRALayer(nn.Module):
         self,
         in_features: int,
         out_features: int,
-        rank: int = 16,
-        alpha: float = 32.0,
-        dropout: float = 0.0
+        rank: int,
+        alpha: float,
+        dropout: float
     ):
         super().__init__()
         
@@ -72,9 +72,9 @@ class LoRALinear(nn.Module):
     def __init__(
         self,
         base_layer: nn.Linear,
-        rank: int = 16,
-        alpha: float = 32.0,
-        dropout: float = 0.0
+        rank: int,
+        alpha: float,
+        dropout: float
     ):
         super().__init__()
         
@@ -101,9 +101,9 @@ class LoRALinear(nn.Module):
 def replace_linear_with_lora(
     module: nn.Module,
     target_modules: list,
-    rank: int = 16,
-    alpha: float = 32.0,
-    dropout: float = 0.0
+    rank: int,
+    alpha: float,
+    dropout: float
 ) -> Dict[str, LoRALinear]:
     """
     Replace specified linear layers in a module with LoRA-adapted versions.
@@ -145,9 +145,9 @@ class LoRAConfig:
     
     def __init__(
         self,
-        rank: int = 16,
-        alpha: float = 32.0,
-        dropout: float = 0.0,
+        rank: int,
+        alpha: float,
+        dropout: float,
         target_modules: list = None,
         apply_to_layers: list = None
     ):

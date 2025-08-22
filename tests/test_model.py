@@ -7,8 +7,7 @@ import torch
 import numpy as np
 from src.model.StutteringClassifier import (
     create_model, 
-    StutteringClassifier,
-    TrainingConfig
+    StutteringClassifier
 )
 
 
@@ -162,35 +161,6 @@ def test_loss_computation():
     print(f"  - Loss value: {loss.item():.4f}")
     print(f"  - Trainable params with gradients: {trainable_grad_count}")
     print(f"  - Frozen params (no gradients): {frozen_grad_count}")
-
-
-def test_training_config():
-    """Test training configuration."""
-    print("\nTesting training configuration...")
-    
-    config = TrainingConfig()
-    model = create_model()
-    
-    # Test optimizer creation
-    optimizer = config.get_optimizer(model)
-    assert len(optimizer.param_groups) == 1, "Should have one parameter group"
-    
-    # Check that optimizer only has trainable parameters
-    optimizer_param_count = sum(len(group['params']) for group in optimizer.param_groups)
-    model_trainable_count = sum(1 for p in model.parameters() if p.requires_grad)
-    
-    assert optimizer_param_count == model_trainable_count, \
-        "Optimizer should only contain trainable parameters"
-    
-    # Test scheduler creation
-    num_training_steps = 1000
-    scheduler = config.get_scheduler(optimizer, num_training_steps)
-    
-    print(f"✓ Training configuration successful")
-    print(f"  - Learning rate: {config.learning_rate}")
-    print(f"  - Batch size: {config.batch_size}")
-    print(f"  - Optimizer param count: {optimizer_param_count}")
-    print(f"  - Scheduler created successfully")
 
 
 def test_save_load_lora():

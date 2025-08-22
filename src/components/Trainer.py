@@ -31,6 +31,7 @@ class StutteringDetectorTrainer:
         train_loader: DataLoader,
         val_loader: DataLoader,
         device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
+        weight_decay: float = 0.05,
         learning_rate: float = 1e-4,
         num_epochs: int = 30,
         patience: int = 3,
@@ -55,7 +56,7 @@ class StutteringDetectorTrainer:
         self.optimizer = optim.AdamW(
             trainable_params,
             lr=learning_rate,
-            weight_decay=0.05,
+            weight_decay=weight_decay,
             eps=1e-8,
             betas=(0.9, 0.98)
         )
