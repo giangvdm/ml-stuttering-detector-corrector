@@ -209,10 +209,10 @@ def test_save_load_lora():
     # Now test LoRA save/load by restoring to original state
     # First save the LoRA weights from the original state
     model.load_state_dict(original_state)  # Restore original state
-    model.save_lora_weights('test_lora_weights.pt')  # Save original LoRA weights
+    model.save_trainable_weights('test_lora_weights.pt')  # Save trainable weights
     
     # Load them back
-    model.load_lora_weights('test_lora_weights.pt')
+    model.load_trainable_weights('test_lora_weights.pt')
     
     # Check that we get back to original outputs
     model.eval()

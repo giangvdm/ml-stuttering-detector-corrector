@@ -122,49 +122,57 @@ class StutteringClassifier(nn.Module):
     
     def get_trainable_parameters(self) -> Dict[str, int]:
         """Get information about trainable parameters."""
-        return self.encoder.get_trainable_parameters()
+        total_params = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        
+        return {
+            'total_params': total_params,
+            'trainable_params': trainable_params,
+            'trainable_percentage': (trainable_params / total_params) * 100
+        }
     
     def get_lora_parameters(self) -> Dict[str, torch.Tensor]:
         """Get LoRA parameters for saving/loading."""
         return self.encoder.get_lora_parameters()
     
-    def save_lora_weights(self, path: str):
-        """Save only LoRA weights (efficient storage)."""
-        lora_state = {}
+    def save_trainable_weights(self, path: str):
+        """Save all trainable weights (LoRA + classification head)."""
+        trainable_state = {}
         
         # Save LoRA parameters from encoder
         encoder_lora_state = self.encoder.get_lora_state_dict()
-        lora_state.update(encoder_lora_state)
+        for key, param in encoder_lora_state.items():
+            trainable_state[f'encoder_lora.{key}'] = param
         
         # Save classification head parameters
         for name, param in self.classification_head.named_parameters():
-            lora_state[f'classification_head.{name}'] = param.data.clone()
+            trainable_state[f'classification_head.{name}'] = param.data.clone()
         
-        torch.save(lora_state, path)
+        torch.save(trainable_state, path)
     
-    def load_lora_weights(self, path: str):
-        """Load LoRA weights."""
+    def load_trainable_weights(self, path: str):
+        """Load all trainable weights (LoRA + classification head)."""
         state_dict = torch.load(path, map_location='cpu')
         
-        # Separate encoder and classification head parameters
-        encoder_state = {}
+        # Separate encoder LoRA and classification head parameters
+        encoder_lora_state = {}
         head_state = {}
         
         for name, param in state_dict.items():
-            if name.startswith('classification_head.'):
+            if name.startswith('encoder_lora.'):
+                lora_name = name.replace('encoder_lora.', '')
+                encoder_lora_state[lora_name] = param
+            elif name.startswith('classification_head.'):
                 head_name = name.replace('classification_head.', '')
                 head_state[head_name] = param
-            else:
-                encoder_state[name] = param
         
         # Load encoder LoRA weights
-        if encoder_state:
-            self.encoder.load_lora_state_dict(encoder_state)
+        if encoder_lora_state:
+            self.encoder.load_lora_state_dict(encoder_lora_state)
         
         # Load classification head weights
         if head_state:
-            # Use strict=True to ensure all parameters are loaded correctly
-            missing_keys, unexpected_keys = self.classification_head.load_state_dict(head_state, strict=False)
+            missing_keys, unexpected_keys = self.classification_head.load_state_dict(head_state, strict=True)
             if missing_keys:
                 print(f"Warning: Missing keys in classification head: {missing_keys}")
             if unexpected_keys:
