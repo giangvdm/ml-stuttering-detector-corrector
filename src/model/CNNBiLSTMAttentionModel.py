@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 from typing import Dict
-from src.components.CNNFeatureExtractor import CNNFeatureExtractor
-from src.components.BiLSTMAttentionModule import BiLSTMAttentionModule
+from src.components.CNNFeatureExtractor import CNNFeatureExtractor, EnhancedBiLSTMAttentionModule
+# from src.components.BiLSTMAttentionModule import BiLSTMAttentionModule
 from src.components.DysfluencyClassificationHead import DisfluencyClassificationHead
 
 
@@ -34,7 +34,7 @@ class CNNBiLSTMAttentionModel(nn.Module):
         
         # 1. CNN Feature Extraction (4 blocks)
         self.cnn_extractor = CNNFeatureExtractor()
-        cnn_output_dim = 256  # From CNNFeatureExtractor
+        cnn_output_dim = 512  # From CNNFeatureExtractor
         
         # 2. Reshape CNN output for sequence processing
         # We need to create a sequence from CNN features for LSTM
@@ -42,7 +42,7 @@ class CNNBiLSTMAttentionModel(nn.Module):
         self.feature_projection = nn.Linear(cnn_output_dim, lstm_hidden_dim)
         
         # 3. BiLSTM + Attention Temporal Modeling
-        self.temporal_model = BiLSTMAttentionModule(
+        self.temporal_model = EnhancedBiLSTMAttentionModule(
             input_dim=lstm_hidden_dim,
             hidden_dim=lstm_hidden_dim,
             num_heads=attention_heads,
