@@ -10,6 +10,7 @@ from tqdm import tqdm
 import json
 from pathlib import Path
 from src.components.Dataset import Sep28kDataset
+from src.components.FocalLoss import AdaptiveFocalLoss, create_focal_loss_from_bce
 from src.utils.training_plotter import plot_training_metrics
 
 DYSFLUENT_CLASSES = ['Block', 'Prolongation', 'SoundRep', 'WordRep', 'Interjection', 'NoStutteredWords']
@@ -33,6 +34,10 @@ class StutteringDetectorTrainer:
         device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
         weight_decay: float = 0.05,
         learning_rate: float = 1e-4,
+        use_focal_loss: bool = True,
+        focal_gamma: float = 1.0,
+        focal_alpha: Optional[float] = 0.75,
+        use_adaptive_focal: bool = False,
         num_epochs: int = 30,
         patience: int = 3,
         save_dir: str = './models',
@@ -70,7 +75,26 @@ class StutteringDetectorTrainer:
         weights = weights.to(device)
         
         # Multi-label loss function only
-        self.criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
+        if use_focal_loss:
+            if use_adaptive_focal:
+                self.logger.info(f"Using Adaptive Focal Loss (gamma: {focal_gamma} -> 1.0, alpha: {focal_alpha})")
+                self.criterion = AdaptiveFocalLoss(
+                    initial_gamma=focal_gamma,
+                    final_gamma=1.0,
+                    decay_steps=len(train_loader) * 5,  # 5 epochs to decay
+                    alpha=focal_alpha,
+                    pos_weight=weights
+                )
+            else:
+                self.logger.info(f"Using Focal Loss (gamma: {focal_gamma}, alpha: {focal_alpha})")
+                self.criterion = create_focal_loss_from_bce(
+                    pos_weight=weights,
+                    gamma=focal_gamma,
+                    alpha=focal_alpha
+                )
+        else:
+            self.logger.info("Using BCEWithLogitsLoss")
+            self.criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
         
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
